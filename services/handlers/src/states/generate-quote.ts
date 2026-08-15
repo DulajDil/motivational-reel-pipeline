@@ -149,5 +149,4 @@ export const generateQuoteAndMetadata = async (
   return { ...state, status: 'QUOTE_READY', generationAttempts: 0 };
 };
 
-export const handler = async (state: WorkflowState): Promise<WorkflowState> =>
-  generateQuoteAndMetadata(state);
+// No Lambda entry point: this step runs inside PrepareContent.

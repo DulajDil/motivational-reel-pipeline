@@ -117,29 +117,21 @@ export class ComputeStack extends Stack {
     );
 
     // ------------------------------------------------------------ functions
-    this.functions.createJob = this.makeFunction('CreateJob', {
-      entry: entry('services/handlers/src/states/create-job.ts'),
-      role: orchestrationRole,
-      timeout: Duration.seconds(30),
-    });
-    this.functions.generateQuote = this.makeFunction('GenerateQuote', {
-      entry: entry('services/handlers/src/states/generate-quote.ts'),
+    // CreateJob, GenerateQuote, GenerateImage and ValidateImage were four states
+    // and four functions. They are one function now: the image regeneration loop
+    // is a `for` loop rather than a Choice, and nothing in the sequence needs to
+    // survive independently of the rest.
+    //
+    // 14 minutes leaves a minute of headroom under the Lambda ceiling, and the
+    // handler refuses to start another image attempt without 2 minutes left, so
+    // it parks for review rather than being killed mid-write.
+    this.functions.prepareContent = this.makeFunction('PrepareContent', {
+      entry: entry('services/handlers/src/states/prepare-content.ts'),
       role: generationRole,
-      timeout: Duration.minutes(2),
-    });
-    this.functions.generateImage = this.makeFunction('GenerateImage', {
-      entry: entry('services/handlers/src/states/generate-image.ts'),
-      role: generationRole,
-      timeout: Duration.minutes(5),
-      memorySize: 1_024,
+      timeout: Duration.minutes(14),
+      memorySize: 1_536,
       // Bounds concurrent spend on the image model.
       reservedConcurrentExecutions: 4,
-    });
-    this.functions.validateImage = this.makeFunction('ValidateImage', {
-      entry: entry('services/handlers/src/states/validate-image.ts'),
-      role: generationRole,
-      timeout: Duration.minutes(2),
-      memorySize: 1_536,
     });
     this.functions.scheduleOrPublish = this.makeFunction('ScheduleOrPublish', {
       entry: entry('services/handlers/src/states/schedule-or-publish.ts'),

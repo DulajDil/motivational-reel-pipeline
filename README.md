@@ -92,8 +92,8 @@ EventBridge Scheduler (timezone-aware)
         ▼
   BatchTrigger ──► Step Functions Standard state machine
                           │
-   CreateJob ─► GenerateQuote ─► GenerateImage ⇄ ValidateImage
-                          │              (bounded regeneration loop)
+                   PrepareContent   (one Lambda: create job, quote,
+                          │          image ⇄ validate loop inside)
                           ▼
                      RenderReel  (Lambda container, FFmpeg)
                           ▼

@@ -93,5 +93,4 @@ export const validateImage = async (
   };
 };
 
-export const handler = async (state: WorkflowState): Promise<ValidateImageResult> =>
-  validateImage(state);
+// No Lambda entry point: this step runs inside PrepareContent.

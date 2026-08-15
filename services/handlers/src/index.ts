@@ -13,6 +13,11 @@ export { generateQuoteAndMetadata } from './states/generate-quote.js';
 export { generateImage } from './states/generate-image.js';
 export { validateImage, type ValidateImageResult } from './states/validate-image.js';
 export {
+  prepareContent,
+  type PrepareContentOptions,
+  type PrepareContentResult,
+} from './states/prepare-content.js';
+export {
   scheduleOrPublish,
   type PlatformDecision,
   type ScheduleDecision,

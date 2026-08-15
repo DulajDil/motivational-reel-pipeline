@@ -53,7 +53,7 @@ export const createJob = async (
 
   // Guard 2: soft daily spend budget.
   if (config.COST_GUARD_ENABLED) {
-    const estimate = estimateJobCostUsd(config.DAILY_COST_BUDGET_USD);
+    const estimate = estimateJobCostUsd();
     const guard = await repository.consumeCostBudget(
       `daily#${publishDate}`,
       estimate,
@@ -145,6 +145,6 @@ export const createJob = async (
  * Very rough per-job cost estimate used only to drive the soft guard. It is a
  * budget tripwire, not accounting - real spend is tracked by AWS Budgets.
  */
-export const estimateJobCostUsd = (_dailyBudget: number): number => 0.25;
+export const estimateJobCostUsd = (): number => 0.25;
 
-export const handler = async (input: CreateJobInput): Promise<WorkflowState> => createJob(input);
+// No Lambda entry point: this step runs inside PrepareContent.

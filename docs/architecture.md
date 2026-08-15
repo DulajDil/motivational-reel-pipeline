@@ -10,10 +10,7 @@ flowchart TB
     end
 
     subgraph workflow["Step Functions Standard"]
-        CJ["CreateJob"]
-        GQ["GenerateQuoteAndMetadata"]
-        GI["GenerateImage"]
-        VI["ValidateImage"]
+        PC["PrepareContent<br/>createJob + quote +<br/>image/validate loop"]
         RR["RenderReel<br/>container + FFmpeg"]
         VV["ValidateVideo<br/>container + ffprobe"]
         SP["ScheduleOrPublish"]
@@ -38,28 +35,20 @@ flowchart TB
         FB["Facebook Page Reels API"]
     end
 
-    SCH --> BT --> CJ --> GQ --> GI --> VI
-    VI -->|invalid, attempts left| GI
-    VI -->|valid| RR --> VV --> SP
+    SCH --> BT --> PC --> RR --> VV --> SP
     SP -->|in window| PI & PF
     SP -->|outside window| W --> PI & PF
     PI --> CO
     PF --> CO
 
-    CJ -.-> HF
-    GQ -.-> HF
-    GI -.-> HF
-    VI -.-> HF
+    PC -.-> HF
     RR -.-> HF
     VV -.-> HF
 
-    CJ <--> DDB
-    GQ <--> DDB
-    GQ --> BR
-    GI --> BR
-    GI --> S3
-    VI --> RK
-    VI --> S3
+    PC <--> DDB
+    PC --> BR
+    PC --> RK
+    PC --> S3
     RR --> S3
     VV --> S3
     SP <--> DDB
@@ -94,10 +83,7 @@ one platform failing never fails the other or the job.
 
 | State | Function | Retries | On failure |
 |---|---|---|---|
-| `CreateJob` | orchestration | `RetryableError` ×3, full jitter | → `HandleFailure` |
-| `GenerateQuoteAndMetadata` | generation | ×3 | → `HandleFailure` |
-| `GenerateImage` | generation | ×3 | → `HandleFailure` |
-| `ValidateImage` | generation | ×3 | loop to `GenerateImage`, else `HandleFailure` |
+| `PrepareContent` | generation | `RetryableError` ×3, full jitter, 14 min timeout | → `HandleFailure` |
 | `RenderReel` | renderer (container) | ×3, 12 min timeout | → `HandleFailure` |
 | `ValidateVideo` | renderer (container) | ×3, 6 min timeout | → `HandleFailure` |
 | `ScheduleOrPublish` | publisher | ×3 | → `HandleFailure` |
@@ -119,12 +105,15 @@ Deliberately split, and never nested:
 
 There are exactly two loops, and both terminate by construction:
 
-1. **Image regeneration.** `ValidateImage` returns `imageValid: false` and an
-   incremented attempt counter. At `MAX_GENERATION_ATTEMPTS` it throws
-   `ManualReviewRequiredError` instead of returning, so the Choice cannot loop
-   again.
-2. **Container polling.** `Wait` → `CheckStatus` → Choice. `checkPublishStatus`
-   throws once `MAX_CONTAINER_POLL_ATTEMPTS` is reached.
+1. **Image regeneration** - a `for` loop *inside* `PrepareContent`, not a state
+   transition. `validateImage` throws `ManualReviewRequiredError` once
+   `MAX_GENERATION_ATTEMPTS` is reached, and the `for` bound is a second,
+   structural guarantee. A deadline guard refuses to start another attempt
+   without two minutes of Lambda budget left, so the function parks the job for
+   review rather than being killed mid-write.
+2. **Container polling** - `Wait` -> `CheckStatus` -> Choice, in the state
+   machine. `checkPublishStatus` throws once `MAX_CONTAINER_POLL_ATTEMPTS` is
+   reached.
 
 An `EXPIRED` container routes back to container creation rather than retrying a
 dead ID — but the publish-attempt counter is persisted, so that path is bounded
@@ -198,7 +187,7 @@ sequenceDiagram
     participant PUB as Publisher Lambda
     participant META as Meta Graph
 
-    SFN->>GEN: GenerateImage
+    SFN->>GEN: PrepareContent
     GEN->>S3: put raw/ (redacted response)
     GEN->>S3: put images/ (PNG)
     GEN->>DDB: update job.image
@@ -225,7 +214,7 @@ sequenceDiagram
 
 | Control | Where | Default |
 |---|---|---|
-| Image generation concurrency | Lambda reserved concurrency | 4 |
+| Content generation concurrency | Lambda reserved concurrency | 4 |
 | Render concurrency | Lambda reserved concurrency | 3 |
 | Publish concurrency | Lambda reserved concurrency | 2 per phase |
 | Daily publishes per platform | Atomic DynamoDB counter | 5 |

@@ -11,9 +11,8 @@ import { profileFor, probeVideo, renderReel, validateProbe } from '@mrp/renderer
 
 import type { Runtime } from '../context.js';
 import { complete, type CompleteResult } from '../states/complete.js';
-import { createJob, type CreateJobInput } from '../states/create-job.js';
-import { generateImage } from '../states/generate-image.js';
-import { generateQuoteAndMetadata } from '../states/generate-quote.js';
+import type { CreateJobInput } from '../states/create-job.js';
+import { prepareContent } from '../states/prepare-content.js';
 import {
   checkPublishStatus,
   createPublishContainer,
@@ -21,7 +20,6 @@ import {
   type PublishBranchState,
 } from '../states/publish.js';
 import { scheduleOrPublish } from '../states/schedule-or-publish.js';
-import { validateImage } from '../states/validate-image.js';
 
 /**
  * In-process orchestrator.
@@ -54,27 +52,13 @@ export interface RunJobResult {
 export const runJobLocally = async (options: RunJobOptions): Promise<RunJobResult> => {
   const { runtime } = options;
 
-  let state = await createJob(options.input, runtime);
+  // One call, exactly as the state machine does it: PrepareContent covers job
+  // creation, quote generation and the bounded image generate/validate loop.
+  let state: WorkflowState = await prepareContent(options.input, runtime);
   if (state.alreadyComplete) {
     const job = await runtime.repository.getJob(state.jobId);
     return { state, job: job as Job, summary: undefined };
   }
-
-  state = await generateQuoteAndMetadata(state, runtime);
-
-  // Bounded image generation loop, mirroring the state machine's Choice.
-  let imageValid = false;
-  for (
-    let attempt = 0;
-    attempt < runtime.config.MAX_GENERATION_ATTEMPTS && !imageValid;
-    attempt += 1
-  ) {
-    state = await generateImage(state, runtime);
-    const validated = await validateImage(state, runtime);
-    imageValid = validated.imageValid;
-    state = validated;
-  }
-  if (!imageValid) throw new NonRetryableError('Image validation never passed');
 
   let videoPath: string | undefined;
   if (!options.skipRender) {

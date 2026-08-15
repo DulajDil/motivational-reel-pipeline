@@ -26,14 +26,20 @@ export interface WorkflowStackProps extends StackProps {
   compute: ComputeStack;
 }
 
-/** Error names the machine matches on. Mirrors services/shared/src/errors. */
-const ERR = {
-  retryable: 'RetryableError',
-  nonRetryable: 'NonRetryableError',
-  manualReview: 'ManualReviewRequiredError',
-  configuration: 'ConfigurationError',
-  guard: 'GuardTrippedError',
-} as const;
+/**
+ * Errors the machine retries. The name is the thrown class's name, so this
+ * string is a contract with services/shared/src/errors - renaming the class
+ * silently stops the retry matching.
+ *
+ * Every other error kind (NonRetryableError, ManualReviewRequiredError,
+ * ConfigurationError, GuardTrippedError) is deliberately absent: those are
+ * terminal and are picked up by the States.ALL catch instead.
+ */
+const RETRYABLE_ERRORS = [
+  'RetryableError',
+  'Lambda.ServiceException',
+  'Lambda.TooManyRequestsException',
+] as const;
 
 /**
  * The state machine.
@@ -68,7 +74,7 @@ export class WorkflowStack extends Stack {
       });
       if (options.retryable !== false) {
         task.addRetry({
-          errors: [ERR.retryable, 'Lambda.ServiceException', 'Lambda.TooManyRequestsException'],
+          errors: [...RETRYABLE_ERRORS],
           interval: Duration.seconds(5),
           maxAttempts: 3,
           backoffRate: 2,
@@ -189,45 +195,25 @@ export class WorkflowStack extends Stack {
     }).addCatch(handleFailure, catchAll);
     renderReel.next(validateVideo);
 
-    const generateImage = invoke('GenerateImageTask', compute.functions.generateImage!).addCatch(
-      handleFailure,
-      catchAll,
-    );
-    const validateImage = invoke('ValidateImageTask', compute.functions.validateImage!).addCatch(
-      handleFailure,
-      catchAll,
-    );
+    // One state covers job creation, quote generation and the bounded image
+    // generate/validate loop. That loop used to be a Choice looping back to
+    // GenerateImage; it is a `for` loop inside the handler now, which removes
+    // four states and the state-machine plumbing that went with them.
+    const prepareContent = invoke('PrepareContentTask', compute.functions.prepareContent!, {
+      timeout: Duration.minutes(15),
+    }).addCatch(handleFailure, catchAll);
 
-    generateImage.next(validateImage);
-    validateImage.next(
-      new sfn.Choice(this, 'ImageAcceptable?')
-        .when(sfn.Condition.booleanEquals('$.imageValid', true), renderReel)
-        // Bounded: ValidateImage throws ManualReviewRequiredError once the
-        // attempt budget is exhausted, so this loop always terminates.
-        .otherwise(generateImage),
-    );
-
-    const generateQuote = invoke('GenerateQuoteTask', compute.functions.generateQuote!).addCatch(
-      handleFailure,
-      catchAll,
-    );
-    generateQuote.next(generateImage);
-
-    const createJob = invoke('CreateJobTask', compute.functions.createJob!).addCatch(
-      handleFailure,
-      catchAll,
-    );
-    createJob.next(
+    prepareContent.next(
       new sfn.Choice(this, 'AlreadyComplete?')
         .when(sfn.Condition.booleanEquals('$.alreadyComplete', true), succeeded)
-        .otherwise(generateQuote),
+        .otherwise(renderReel),
     );
 
     // ------------------------------------------------------- state machine
     this.stateMachine = new sfn.StateMachine(this, 'ReelPipeline', {
       stateMachineName: resourceName(settings, 'pipeline'),
       stateMachineType: sfn.StateMachineType.STANDARD,
-      definitionBody: sfn.DefinitionBody.fromChainable(createJob),
+      definitionBody: sfn.DefinitionBody.fromChainable(prepareContent),
       timeout: Duration.hours(26),
       tracingEnabled: true,
       logs: {

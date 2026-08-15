@@ -97,4 +97,4 @@ export const generateImage = async (
   return { ...state, generationAttempts: attempt };
 };
 
-export const handler = async (state: WorkflowState): Promise<WorkflowState> => generateImage(state);
+// No Lambda entry point: this step runs inside PrepareContent.

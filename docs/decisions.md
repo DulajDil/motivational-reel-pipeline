@@ -174,3 +174,42 @@ is cheap; a false negative publishes a medical claim to a real audience.
 
 Rekognition moderation *is* used for images, where deterministic rules cannot
 reach.
+
+---
+
+## 11. Four generation states merged into one `PrepareContent` Lambda
+
+**Decision.** `CreateJob`, `GenerateQuoteAndMetadata`, `GenerateImage` and
+`ValidateImage` were four Step Functions states and four Lambda functions. They
+are now one state and one function, with the image regeneration loop as a `for`
+loop inside the handler.
+
+**Why.** The only reason the state machine needed a `Choice` there was to loop
+back to `GenerateImage` on a rejected image. A Choice whose entire job is "try
+again" is a loop written in the most expensive possible notation: it costs state
+transitions, it spreads one decision across two files, and it forces the attempt
+counter to travel through the state document.
+
+Measured effect on the synthesized template: **33 states to 29**, **18 Lambda
+functions to 15**, and the linear happy path — the part you read top to bottom —
+from **10 states to 6**.
+
+**What stayed a state, and why.** Everything whose reason for existing is
+durability rather than sequencing:
+
+- `RenderReel` — a 4 GB container that must not be held warm while anything waits
+- `ValidateVideo` — the terminal gate before publishing
+- `WaitForPublishWindow` — an hours-long durable wait no Lambda can hold
+- the publish phases — bounded polling plus per-platform failure isolation
+
+**Constraint accepted.** The merged sequence must fit inside a Lambda. Worst case
+is quote generation plus `MAX_GENERATION_ATTEMPTS` image attempts. The function
+is capped at 14 minutes, and a deadline guard refuses to begin another attempt
+without 2 minutes remaining — so it parks the job for review rather than being
+killed mid-write. Raising `MAX_GENERATION_ATTEMPTS` much beyond 3, or moving to a
+substantially slower image model, is the thing that would break this and force
+the states back apart.
+
+**Trade-off.** Failures are now attributable to `PrepareContent` rather than to
+one of four named states. The `EVT#` audit trail and the structured logs still
+distinguish them, so this cost is paid in the console view only.
