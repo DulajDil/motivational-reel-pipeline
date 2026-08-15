@@ -1,0 +1,50 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+# No AWS credentials are configured anywhere in this workflow, and none are
+# needed: unit, contract and integration tests all run against mock providers,
+# an in-memory repository and the local filesystem.
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - run: npm ci
+
+      # Needed for the render and ffprobe integration tests. The npm
+      # `ffmpeg-static` dev dependency supplies an ffmpeg with drawtext; the
+      # system package supplies ffprobe.
+      - name: Install ffprobe
+        run: sudo apt-get update && sudo apt-get install -y ffmpeg
+
+      - name: Fetch fonts
+        run: npm run fonts:fetch
+
+      - run: npm run lint
+      - run: npm run typecheck
+      - run: npm test
+      - run: npm run synth
+
+      - name: Check for committed secrets
+        run: |
+          # Belt and braces alongside the lint rule: fail if anything
+          # token-shaped reached the tree. tests/ is excluded because it holds
+          # deliberate token-shaped fixtures that prove redaction works.
+          if git grep -nIE '(EAA[A-Za-z0-9]{30,}|sk-[A-Za-z0-9_-]{30,}|AKIA[A-Z0-9]{16})' \
+               -- . ':!*.md' ':!tests/**'; then
+            echo "::error::Possible credential committed"
+            exit 1
+          fi
