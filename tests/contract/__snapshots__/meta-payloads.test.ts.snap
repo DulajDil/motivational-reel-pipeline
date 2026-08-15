@@ -1,0 +1,72 @@
+// Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
+
+exports[`Graph request builders > builds the Facebook Reels upload-session requests 1`] = `
+{
+  "form": {
+    "upload_phase": "start",
+  },
+  "method": "POST",
+  "url": "https://graph.facebook.com/v21.0/9876543210/video_reels",
+}
+`;
+
+exports[`Graph request builders > builds the Facebook Reels upload-session requests 2`] = `
+{
+  "headers": {
+    "file_url": "https://example.test/reel.mp4",
+  },
+  "method": "POST",
+  "url": "https://rupload.facebook.com/video-upload/v21.0/v1",
+}
+`;
+
+exports[`Graph request builders > builds the Facebook Reels upload-session requests 3`] = `
+{
+  "form": {
+    "description": "a caption",
+    "upload_phase": "finish",
+    "video_id": "v1",
+    "video_state": "PUBLISHED",
+  },
+  "method": "POST",
+  "url": "https://graph.facebook.com/v21.0/9876543210/video_reels",
+}
+`;
+
+exports[`Graph request builders > builds the Instagram Reels container request 1`] = `
+{
+  "form": {
+    "caption": "a caption",
+    "cover_url": "https://example.test/cover.jpg",
+    "media_type": "REELS",
+    "share_to_feed": "true",
+    "video_url": "https://example.test/reel.mp4?sig=x",
+  },
+  "method": "POST",
+  "url": "https://graph.facebook.com/v21.0/17841400000000000/media",
+}
+`;
+
+exports[`Graph request builders > builds the status, publish and quota requests 1`] = `
+{
+  "method": "GET",
+  "url": "https://graph.facebook.com/v21.0/123?fields=status_code%2Cstatus",
+}
+`;
+
+exports[`Graph request builders > builds the status, publish and quota requests 2`] = `
+{
+  "form": {
+    "creation_id": "123",
+  },
+  "method": "POST",
+  "url": "https://graph.facebook.com/v21.0/17841400000000000/media_publish",
+}
+`;
+
+exports[`Graph request builders > builds the status, publish and quota requests 3`] = `
+{
+  "method": "GET",
+  "url": "https://graph.facebook.com/v21.0/17841400000000000/content_publishing_limit?fields=config%2Cquota_usage",
+}
+`;
