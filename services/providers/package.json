@@ -1,0 +1,18 @@
+{
+  "name": "@mrp/providers",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "main": "src/index.ts",
+  "types": "src/index.ts",
+  "exports": {
+    ".": "./src/index.ts",
+    "./*": "./src/*"
+  },
+  "dependencies": {
+    "@aws-sdk/client-bedrock-runtime": "^3.716.0",
+    "@aws-sdk/client-rekognition": "^3.716.0",
+    "@mrp/shared": "*",
+    "zod": "^3.24.1"
+  }
+}
