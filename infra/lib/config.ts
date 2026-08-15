@@ -61,6 +61,7 @@ export const loadDeploySettings = (scope: Construct): DeploySettings => {
       FACEBOOK_PAGE_ID: ctx(scope, 'facebookPageId') ?? '',
       BEDROCK_TEXT_MODEL_ID: ctx(scope, 'bedrockTextModelId') ?? '',
       BEDROCK_IMAGE_MODEL_ID: ctx(scope, 'bedrockImageModelId') ?? '',
+      BEDROCK_IMAGE_REGION: ctx(scope, 'bedrockImageRegion') ?? '',
       BRAND_HANDLE: ctx(scope, 'brandHandle') ?? '',
       COST_GUARD_ENABLED: ctx(scope, 'costGuardEnabled') ?? 'true',
       CONFIG_VERSION: ctx(scope, 'configVersion') ?? '1',

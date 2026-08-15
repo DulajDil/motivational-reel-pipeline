@@ -31,8 +31,12 @@ Nothing is hardcoded, because model availability differs per account and region.
 - [ ] Set `BEDROCK_IMAGE_MODEL_ID`, and confirm it can produce **1080×1920**.
 - [ ] Confirm which request body shape your image model expects and set
       `BedrockImageBodyStyle` (`nova_titan` or `stability`) accordingly.
-- [ ] If image models are unavailable in your region, set `BEDROCK_REGION` to one
-      where they are, or use a cross-region inference profile.
+- [ ] **Set `BEDROCK_IMAGE_REGION=us-east-1`.** Checked against the live Bedrock
+      API on 2026-08-15: `ap-southeast-2` exposes **61 text models and ZERO
+      image-generation models**, while `us-east-1` exposes 14, including
+      `amazon.nova-canvas-v1:0` at **$0.06 per image**. Text can stay in Sydney;
+      image generation cannot. Re-verify in *your* account - model access is
+      granted per account, and this was checked in a different one.
 - [ ] Once confirmed, narrow the `bedrock:InvokeModel` IAM resource in
       `infra/lib/compute-stack.ts` from `*` to the specific model ARNs.
 

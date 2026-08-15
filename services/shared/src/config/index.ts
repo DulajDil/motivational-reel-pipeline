@@ -20,8 +20,10 @@ export interface AppConfig extends RawConfig {
    * publishers check; there is no other route to a real Meta call.
    */
   productionPublishingEnabled: boolean;
-  /** Region used for Bedrock calls (may differ from the stack region). */
+  /** Region used for Bedrock text calls (may differ from the stack region). */
   bedrockRegion: string;
+  /** Region used for Bedrock image calls; often not the stack region at all. */
+  bedrockImageRegion: string;
 }
 
 const requireValue = (value: string | undefined, name: string, why: string): string => {
@@ -109,6 +111,8 @@ export const loadConfig = (env: NodeJS.ProcessEnv = process.env): AppConfig => {
     publishWindows: parsePublishWindows(config.PUBLISH_WINDOWS),
     productionPublishingEnabled,
     bedrockRegion: config.BEDROCK_REGION ?? config.AWS_REGION,
+    bedrockImageRegion:
+      config.BEDROCK_IMAGE_REGION ?? config.BEDROCK_REGION ?? config.AWS_REGION,
   };
 };
 

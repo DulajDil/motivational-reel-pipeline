@@ -213,3 +213,39 @@ the states back apart.
 **Trade-off.** Failures are now attributable to `PrepareContent` rather than to
 one of four named states. The `EVT#` audit trail and the structured logs still
 distinguish them, so this cost is paid in the console view only.
+
+---
+
+## 12. Image generation gets its own region
+
+**Decision.** `BEDROCK_IMAGE_REGION` is separate from `BEDROCK_REGION`, and the
+provider factory builds a second Bedrock client when they differ.
+
+**Why.** Checked against the live Bedrock API on 2026-08-15:
+
+| Region | Text models | Image-generation models |
+|---|---|---|
+| `ap-southeast-2` (the stack region) | 61 | **0** |
+| `us-east-1` | many | 14, incl. `amazon.nova-canvas-v1:0` |
+
+A single `BEDROCK_REGION` would have forced *both* text and images to us-east-1,
+sending text generation across the Pacific for no reason. Splitting them keeps
+text local and sends only image generation where the models actually are.
+
+**Cost context, from the Price List API on the same date (ap-southeast-2):**
+
+| Item | Price |
+|---|---|
+| Step Functions Standard state transition | $0.000025 (4,000/month free) |
+| Lambda compute, x86 | $0.0000166667 per GB-second (400,000 GB-s/month free) |
+| Nova Canvas image (us-east-1) | $0.06 per image |
+
+At 5 reels/day the pipeline uses ~71,000 Lambda GB-seconds and ~3,450 state
+transitions a month - **both inside the perpetual free tier**. The entire
+marginal bill is image generation: about **$10/month at 5/day, $63/month at
+30/day**, of which Bedrock is 98-100%.
+
+The practical consequence: **orchestration choices here are not cost decisions.**
+The four states merged in decision 11 were worth about **9 cents a month** at 30
+reels/day. That refactor was about clarity. If cost matters, the lever is the
+image model and how often regeneration is triggered - not Step Functions.

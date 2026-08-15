@@ -70,6 +70,13 @@ export const rawConfigSchema = z.object({
   BEDROCK_TEXT_MODEL_ID: optionalString,
   BEDROCK_IMAGE_MODEL_ID: optionalString,
   BEDROCK_REGION: optionalString,
+  /**
+   * Image generation often has to run in a different region from text.
+   * Verified 2026-08-15: ap-southeast-2 exposes 61 text models and ZERO
+   * image-generation models, while us-east-1 exposes 14. Falls back to
+   * BEDROCK_REGION, then AWS_REGION.
+   */
+  BEDROCK_IMAGE_REGION: optionalString,
 
   META_GRAPH_API_VERSION: z
     .string()

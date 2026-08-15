@@ -86,13 +86,19 @@ export const createProviders = ({
     );
   }
 
-  const client = BedrockClient.forRegion(config.bedrockRegion);
+  const textClient = BedrockClient.forRegion(config.bedrockRegion);
+  // Image generation frequently has to run somewhere else: several regions
+  // carry text models but no image-generation models at all.
+  const imageClient =
+    config.bedrockImageRegion === config.bedrockRegion
+      ? textClient
+      : BedrockClient.forRegion(config.bedrockImageRegion);
 
   return {
-    quote: new BedrockQuoteGenerator({ client, modelId: textModelId }),
-    caption: new BedrockCaptionGenerator({ client, modelId: textModelId }),
+    quote: new BedrockQuoteGenerator({ client: textClient, modelId: textModelId }),
+    caption: new BedrockCaptionGenerator({ client: textClient, modelId: textModelId }),
     image: new BedrockImageGenerator({
-      client,
+      client: imageClient,
       modelId: imageModelId,
       bodyStyle: bedrockImageBodyStyle ?? 'nova_titan',
     }),
