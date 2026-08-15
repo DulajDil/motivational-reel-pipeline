@@ -1,0 +1,17 @@
+{
+  "name": "@mrp/infra",
+  "version": "0.1.0",
+  "private": true,
+  "scripts": {
+    "synth": "cdk synth --quiet",
+    "diff": "cdk diff",
+    "deploy": "cdk deploy --all --require-approval broadening"
+  },
+  "dependencies": {
+    "aws-cdk-lib": "^2.173.2",
+    "constructs": "^10.4.2"
+  },
+  "devDependencies": {
+    "aws-cdk": "^2.173.1"
+  }
+}
