@@ -1,4 +1,5 @@
 export * from './types.js';
+export * from './brand-style.js';
 export * from './prompts.js';
 export * from './bedrock-client.js';
 

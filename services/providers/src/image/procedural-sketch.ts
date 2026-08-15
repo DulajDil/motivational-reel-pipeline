@@ -1,6 +1,7 @@
 import { mulberry32 } from '@mrp/shared';
 import type { TextSafeArea } from '@mrp/shared';
 
+import { BRAND_PALETTE } from '../brand-style.js';
 import { encodePng } from './png.js';
 
 /**
@@ -19,9 +20,9 @@ interface Rgb {
   b: number;
 }
 
-const PAPER: Rgb = { r: 243, g: 233, b: 211 };
-const INK: Rgb = { r: 42, g: 34, b: 28 };
-const SEPIA: Rgb = { r: 196, g: 138, b: 84 };
+const PAPER: Rgb = BRAND_PALETTE.paper;
+const INK: Rgb = { r: 42, g: 33, b: 24 };
+const SEPIA: Rgb = { r: 214, g: 150, b: 76 };
 
 const clamp = (value: number, min: number, max: number): number =>
   Math.min(max, Math.max(min, value));
@@ -48,13 +49,18 @@ export const renderProceduralSketch = ({
   const random = mulberry32(seed);
   const pixels = new Uint8Array(width * height * 3);
 
-  // Composition is derived from the seed so the same job always draws the same scene.
-  const horizonY = height * (0.66 + random() * 0.08);
-  const sunX = width * (0.62 + random() * 0.2);
-  const sunY = height * (0.44 + random() * 0.08);
-  const sunR = width * (0.1 + random() * 0.04);
-  const figureX = width * (0.28 + random() * 0.14);
-  const figureH = height * (0.14 + random() * 0.04);
+  /*
+   * Composition mirrors the approved reference frame: clean parchment across
+   * the reserved top band, a low horizon, the sunrise to the right and a small
+   * figure standing to the left of it. Derived from the seed, so the same job
+   * always draws the same scene.
+   */
+  const horizonY = height * (0.74 + random() * 0.05);
+  const sunX = width * (0.64 + random() * 0.14);
+  const sunY = height * (0.62 + random() * 0.05);
+  const sunR = width * (0.1 + random() * 0.03);
+  const figureX = width * (0.3 + random() * 0.1);
+  const figureH = height * (0.17 + random() * 0.03);
 
   const safeTop = textSafeArea.y * height;
   const safeBottom = (textSafeArea.y + textSafeArea.height) * height;
@@ -83,10 +89,19 @@ export const renderProceduralSketch = ({
           colour = mix(colour, INK, clamp(1 - horizonDistance / 2.4, 0, 1) * 0.75);
         }
 
-        // Sun / moon outline.
-        const sunDistance = Math.abs(Math.hypot(x - sunX, y - sunY) - sunR);
+        // Sun outline, plus the radiating strokes from the reference frame.
+        const sunRadius = Math.hypot(x - sunX, y - sunY);
+        const sunDistance = Math.abs(sunRadius - sunR);
         if (sunDistance < 2.2) {
           colour = mix(colour, INK, clamp(1 - sunDistance / 2.2, 0, 1) * 0.6);
+        }
+        if (sunRadius > sunR && sunRadius < sunR * 2.1 && y < horizonY) {
+          const angle = Math.atan2(y - sunY, x - sunX);
+          const ray = Math.abs(Math.sin(angle * 12));
+          if (ray > 0.97) colour = mix(colour, SEPIA, 0.5);
+        }
+        if (sunRadius < sunR) {
+          colour = mix(colour, SEPIA, 0.28);
         }
 
         // Warm sepia wash below the horizon.

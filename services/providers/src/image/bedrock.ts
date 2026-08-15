@@ -50,6 +50,38 @@ export class BedrockImageGenerator implements ImageGenerator {
 
   private buildBody(prompt: string, request: ImageRequest): unknown {
     const style = this.options.bodyStyle ?? 'nova_titan';
+    const reference = request.referenceImage;
+
+    if (style === 'nova_titan' && reference) {
+      /*
+       * Style-consistent generation: the approved reference frame is passed as
+       * an image variation source with a moderate similarity strength, so the
+       * model keeps the paper, linework and palette while the text prompt
+       * drives the new scene.
+       *
+       * NOTE: image-conditioning parameter names and semantics differ between
+       * image model families, and a high similarityStrength will reproduce the
+       * reference rather than restyle a new scene. Validate the output before
+       * enabling this in production - see docs/brand-consistency.md.
+       */
+      return {
+        taskType: 'IMAGE_VARIATION',
+        imageVariationParams: {
+          text: prompt,
+          negativeText: IMAGE_NEGATIVE_PROMPT,
+          images: [Buffer.from(reference.data).toString('base64')],
+          similarityStrength: reference.similarityStrength,
+        },
+        imageGenerationConfig: {
+          numberOfImages: 1,
+          width: request.width,
+          height: request.height,
+          cfgScale: 7,
+          seed: request.seed % 2_147_483_647,
+        },
+      };
+    }
+
     if (style === 'stability') {
       return {
         text_prompts: [
@@ -81,6 +113,7 @@ export class BedrockImageGenerator implements ImageGenerator {
       sceneConcept: request.sceneConcept,
       textSafeArea: request.textSafeArea,
       quoteRenderMode: request.quoteRenderMode,
+      hasReferenceImage: request.referenceImage !== undefined,
     });
 
     const response = await this.options.client.invokeModel(

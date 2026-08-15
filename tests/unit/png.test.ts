@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
 import {
-  DEFAULT_TEXT_SAFE_AREAS,
+  BRAND_TEXT_SAFE_AREA,
   LocalImageValidator,
   decodePng,
   encodePng,
@@ -60,7 +60,7 @@ describe('procedural sketch', () => {
       width: 120,
       height: 200,
       seed: 42,
-      textSafeArea: DEFAULT_TEXT_SAFE_AREAS.upper_left,
+      textSafeArea: BRAND_TEXT_SAFE_AREA,
     };
     expect([...renderProceduralSketch(options)]).toEqual([...renderProceduralSketch(options)]);
   });
@@ -70,13 +70,13 @@ describe('procedural sketch', () => {
       width: 1080,
       height: 1920,
       seed: 7,
-      textSafeArea: DEFAULT_TEXT_SAFE_AREAS.upper_left,
+      textSafeArea: BRAND_TEXT_SAFE_AREA,
     });
 
     const report = await new LocalImageValidator().validate({
       jobId: 'test',
       image: { data, format: 'png', width: 1080, height: 1920 },
-      textSafeArea: DEFAULT_TEXT_SAFE_AREAS.upper_left,
+      textSafeArea: BRAND_TEXT_SAFE_AREA,
       quoteRenderMode: 'overlay',
       expectedWidth: 1080,
       expectedHeight: 1920,
@@ -91,13 +91,13 @@ describe('procedural sketch', () => {
       width: 540,
       height: 960,
       seed: 7,
-      textSafeArea: DEFAULT_TEXT_SAFE_AREAS.upper_left,
+      textSafeArea: BRAND_TEXT_SAFE_AREA,
     });
 
     const report = await new LocalImageValidator().validate({
       jobId: 'test',
       image: { data, format: 'png', width: 540, height: 960 },
-      textSafeArea: DEFAULT_TEXT_SAFE_AREAS.upper_left,
+      textSafeArea: BRAND_TEXT_SAFE_AREA,
       quoteRenderMode: 'overlay',
       expectedWidth: 1080,
       expectedHeight: 1920,
@@ -113,7 +113,7 @@ describe('procedural sketch', () => {
     const report = await new LocalImageValidator().validate({
       jobId: 'test',
       image: { data: blank, format: 'png', width: 1080, height: 1920 },
-      textSafeArea: DEFAULT_TEXT_SAFE_AREAS.upper_left,
+      textSafeArea: BRAND_TEXT_SAFE_AREA,
       quoteRenderMode: 'overlay',
       expectedWidth: 1080,
       expectedHeight: 1920,
@@ -124,7 +124,7 @@ describe('procedural sketch', () => {
   });
 
   it('rejects heavy ink inside the reserved text area', async () => {
-    const area = DEFAULT_TEXT_SAFE_AREAS.upper_left;
+    const area = BRAND_TEXT_SAFE_AREA;
     const rgb = new Uint8Array(1080 * 1920 * 3).fill(240);
 
     // Scribble dark pixels across the reserved area, as stray lettering would.

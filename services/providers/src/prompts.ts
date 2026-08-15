@@ -1,5 +1,11 @@
 import type { QuoteRenderMode, TextSafeArea } from '@mrp/shared';
 
+import {
+  BRAND_STYLE_CLAUSE,
+  BRAND_TEXT_SAFE_AREA,
+  RESERVED_TOP_FRACTION,
+} from './brand-style.js';
+
 /**
  * Prompt library.
  *
@@ -12,10 +18,15 @@ export const PROMPT_VERSIONS = {
   image: 'image-2025-01-a',
 } as const;
 
+/**
+ * Alternative areas, kept for experiments only. Production uses
+ * BRAND_TEXT_SAFE_AREA for every frame - a feed that moves its quote around does
+ * not read as one series.
+ */
 export const DEFAULT_TEXT_SAFE_AREAS: Record<TextSafeArea['position'], TextSafeArea> = {
-  upper_left: { position: 'upper_left', x: 0.08, y: 0.1, width: 0.62, height: 0.26 },
-  upper_middle: { position: 'upper_middle', x: 0.1, y: 0.1, width: 0.8, height: 0.26 },
-  lower_left: { position: 'lower_left', x: 0.08, y: 0.62, width: 0.62, height: 0.26 },
+  upper_middle: BRAND_TEXT_SAFE_AREA,
+  upper_left: { position: 'upper_left', x: 0.08, y: 0.08, width: 0.62, height: 0.24 },
+  lower_left: { position: 'lower_left', x: 0.08, y: 0.62, width: 0.62, height: 0.24 },
 };
 
 export const describeSafeArea = (area: TextSafeArea): string =>
@@ -80,20 +91,36 @@ export const buildImagePrompt = (input: {
   sceneConcept: string;
   textSafeArea: TextSafeArea;
   quoteRenderMode: QuoteRenderMode;
+  /** True when a reference frame is attached to the request. */
+  hasReferenceImage?: boolean;
 }): string => {
+  const reservedPercent = Math.round(RESERVED_TOP_FRACTION * 100);
+
+  const referenceClause = input.hasReferenceImage
+    ? 'Use the attached reference image ONLY as a visual style and composition reference, never as content to copy.'
+    : '';
+
   const lettering =
     input.quoteRenderMode === 'embedded_ai'
-      ? 'Hand-drawn pencil lettering may appear in the reserved area, but it must remain simple and uncluttered.'
-      : 'The reserved area must contain NO text, NO lettering and NO marks of any kind - it stays clean paper.';
+      ? `Simple hand-drawn pencil lettering may appear in the reserved top ${reservedPercent}%, but it must stay sparse and uncluttered.`
+      : [
+          `Reserve the top ${reservedPercent}% of the image as completely clean, empty parchment.`,
+          'Do NOT generate any words, letters, handwriting, logos, watermark, signature,',
+          'border or underline anywhere in that reserved area - a quote is drawn there later.',
+        ].join(' ');
 
   return [
-    `A warm, calm, hand-drawn pencil-sketch illustration on textured cream paper. ${input.sceneConcept}`,
-    'Style: black ink outlines, restrained sepia and soft orange shading, visible pencil grain and paper texture, sparse background, generous empty space, uplifting and peaceful mood.',
-    'The human figure is expressive but generic: no identifiable face, no real person, no celebrity.',
-    `Composition: vertical 9:16 portrait. Leave ${describeSafeArea(input.textSafeArea)} deliberately empty and uncluttered.`,
+    'Create a vertical 9:16 motivational illustration.',
+    referenceClause,
+    BRAND_STYLE_CLAUSE,
+    'IMPORTANT COMPOSITION:',
     lettering,
-    'Simple, original, emotionally clear composition. Avoid visual clutter.',
-  ].join('\n');
+    `Place the character and landscape in the lower ${100 - reservedPercent}% of the frame, with generous empty breathing room around them.`,
+    `Scene: ${input.sceneConcept}`,
+    'Original artwork. No branded or copyrighted characters, and no identifiable real person.',
+  ]
+    .filter(Boolean)
+    .join('\n');
 };
 
 export const IMAGE_NEGATIVE_PROMPT = [

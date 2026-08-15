@@ -2,12 +2,14 @@ import {
   Metrics,
   NonRetryableError,
   emitMetric,
+  parseS3Uri,
   redactPayload,
   renderSeed,
   s3Keys,
   type ImageAsset,
   type WorkflowState,
 } from '@mrp/shared';
+import type { ReferenceImage } from '@mrp/providers';
 
 import { getRuntime, type Runtime } from '../context.js';
 
@@ -31,6 +33,26 @@ export const generateImage = async (
   if (!job) throw new NonRetryableError(`Job ${state.jobId} not found`);
   if (!job.content) throw new NonRetryableError(`Job ${state.jobId} has no content to illustrate`);
 
+  // The approved brand reference frame keeps every Reel in the same visual
+  // series. It is optional: without it the prompt alone drives the style.
+  let referenceImage: ReferenceImage | undefined;
+  if (config.REFERENCE_IMAGE_S3_URI) {
+    const { bucket, key } = parseS3Uri(config.REFERENCE_IMAGE_S3_URI);
+    if (bucket !== store.bucket) {
+      throw new NonRetryableError(
+        `REFERENCE_IMAGE_S3_URI points at bucket "${bucket}" but this function is scoped to "${store.bucket}".`,
+        { code: 'REFERENCE_IMAGE_BUCKET_MISMATCH' },
+      );
+    }
+    referenceImage = {
+      data: await store.get(key),
+      format: key.toLowerCase().endsWith('.jpg') || key.toLowerCase().endsWith('.jpeg')
+        ? 'jpeg'
+        : 'png',
+      similarityStrength: config.REFERENCE_SIMILARITY_STRENGTH,
+    };
+  }
+
   const generated = await providers.image.generate({
     jobId: state.jobId,
     sceneConcept: job.content.sceneConcept,
@@ -41,6 +63,7 @@ export const generateImage = async (
     width: 1080,
     height: 1920,
     attempt,
+    referenceImage,
   });
 
   await store.put({
@@ -88,6 +111,7 @@ export const generateImage = async (
       promptVersion: generated.promptVersion,
       key: stored.key,
       bytes: stored.sizeBytes,
+      usedReferenceImage: referenceImage !== undefined,
     },
   });
 

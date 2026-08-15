@@ -28,6 +28,8 @@ Nothing is hardcoded, because model availability differs per account and region.
       ```
 - [ ] Request model access in the Bedrock console for anything not yet enabled.
 - [ ] Set `BEDROCK_TEXT_MODEL_ID` — must support the **Converse** API.
+      `openai.gpt-5.6-luna` was confirmed available in `ap-southeast-2` on
+      2026-08-15 and is a good default.
 - [ ] Set `BEDROCK_IMAGE_MODEL_ID`, and confirm it can produce **1080×1920**.
 - [ ] Confirm which request body shape your image model expects and set
       `BedrockImageBodyStyle` (`nova_titan` or `stability`) accordingly.
@@ -60,14 +62,28 @@ Follow [`meta-onboarding.md`](meta-onboarding.md) in full. Summary:
       `services/providers/src/publisher/payloads.ts`, and every constraint in
       `renderer/src/profiles.ts` against Meta's current documentation.
 
+## 3b. Brand consistency
+
+Read [`brand-consistency.md`](brand-consistency.md) first.
+
+- [ ] Export one approved frame as the style reference and upload it to
+      `s3://<assets-bucket>/brand/reference-style.png`.
+- [ ] Set `REFERENCE_IMAGE_S3_URI` and start `REFERENCE_SIMILARITY_STRENGTH` at 0.4.
+- [ ] Generate a dozen illustrations and view them **as a grid**. Drift is
+      invisible one frame at a time.
+- [ ] Decide on the image model. `gpt-image-2` is **not on Bedrock** — using it
+      means a direct OpenAI provider, a new API key and a second vendor. Nova
+      Canvas in `us-east-1` is implemented and needs no new vendor.
+
 ## 4. Music and fonts
 
 - [ ] Decide: `silent` (default, always safe) or `owned_licensed`.
 - [ ] If licensed: read [`music-rights.md`](music-rights.md), gather the
       evidence, upload the track to the private assets bucket, set
       `MUSIC_S3_URI` and `MUSIC_LICENSE_REFERENCE`.
-- [ ] `npm run fonts:fetch`, or supply your own font **with its licence file**.
-      Confirm it permits embedding in distributed video.
+- [ ] `npm run fonts:fetch` — installs **Patrick Hand** (SIL OFL 1.1), the
+      closest match to the reference lettering. `FONT_NAME=Kalam ... npm run
+      fonts:fetch` switches to the slightly more polished alternative.
 
 ## 5. Deploy
 
@@ -135,6 +151,13 @@ Honest list of what is implemented but unproven, or deliberately left out.
 - **`ValidateVideo` uses the Instagram profile as the base report** and appends
   per-platform failures. The two profiles are currently identical; if you diverge
   them, revisit `renderer/src/validate-handler.ts`.
+- **Character consistency is not solved.** The style contract keeps paper,
+  palette, typography and composition identical, but nothing guarantees the same
+  *character* recurs across Reels. That needs a fixed cast of character
+  references or a fine-tune.
+- **Nova Canvas `IMAGE_VARIATION` conditioning is unverified.** The request shape
+  is implemented; its behaviour at a given `similarityStrength` must be checked
+  by eye before production.
 - **Near-duplicate image detection** is a contrast/ink-density heuristic plus
   Rekognition OCR. There is no perceptual-hash comparison against previous
   images; `maxSimilarity` is always 0 for images.

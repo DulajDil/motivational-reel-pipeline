@@ -67,6 +67,15 @@ export const rawConfigSchema = z.object({
   QUOTE_MAX_WORDS: z.coerce.number().int().max(40).default(18),
   QUOTE_DEDUPE_WINDOW_DAYS: z.coerce.number().int().min(1).default(90),
 
+  /**
+   * Approved brand reference frame, used as a style guide for every generated
+   * illustration so the feed reads as one series. Must live in the private
+   * assets bucket. Leave blank to generate from the text prompt alone.
+   */
+  REFERENCE_IMAGE_S3_URI: optionalString,
+  /** 0..1. Higher sticks closer to the reference; too high copies it. */
+  REFERENCE_SIMILARITY_STRENGTH: z.coerce.number().min(0).max(1).default(0.4),
+
   BEDROCK_TEXT_MODEL_ID: optionalString,
   BEDROCK_IMAGE_MODEL_ID: optionalString,
   BEDROCK_REGION: optionalString,

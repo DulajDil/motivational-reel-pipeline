@@ -8,7 +8,7 @@ import {
   type ContentMetadata,
   type WorkflowState,
 } from '@mrp/shared';
-import { DEFAULT_TEXT_SAFE_AREAS, validateQuote } from '@mrp/providers';
+import { BRAND_TEXT_SAFE_AREA, validateQuote } from '@mrp/providers';
 
 import { getRuntime, type Runtime } from '../context.js';
 
@@ -102,10 +102,9 @@ export const generateQuoteAndMetadata = async (
     brandHandle: config.BRAND_HANDLE,
   });
 
-  // Alternate the reserved area deterministically so the feed does not look
-  // mechanically identical day to day.
-  const textSafeArea =
-    seed % 2 === 0 ? DEFAULT_TEXT_SAFE_AREAS.upper_left : DEFAULT_TEXT_SAFE_AREAS.upper_middle;
+  // Every frame places the quote identically. Varying it would undermine the
+  // one thing the series depends on: looking like one series.
+  const textSafeArea = BRAND_TEXT_SAFE_AREA;
 
   const content: ContentMetadata = {
     quote: {

@@ -53,6 +53,12 @@ const validate = (config: RawConfig): void => {
     );
   }
 
+  if (config.REFERENCE_IMAGE_S3_URI && !config.REFERENCE_IMAGE_S3_URI.startsWith('s3://')) {
+    throw new ConfigurationError(
+      'REFERENCE_IMAGE_S3_URI must be an s3:// URI in the private assets bucket.',
+    );
+  }
+
   if (config.QUOTE_RENDER_MODE === 'embedded_ai' && config.ENVIRONMENT === 'prod') {
     throw new ConfigurationError(
       'QUOTE_RENDER_MODE=embedded_ai is not permitted in prod: generated typography is not reliable. Use overlay or hybrid.',

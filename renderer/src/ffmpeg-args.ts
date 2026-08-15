@@ -1,5 +1,6 @@
 import { mulberry32 } from '@mrp/shared';
 import type { TextSafeArea } from '@mrp/shared';
+import { BRAND_PALETTE, BRAND_TYPOGRAPHY } from '@mrp/providers';
 
 import { RENDER_PROFILE } from './profiles.js';
 import { layoutQuote, type QuoteLayout } from './text-layout.js';
@@ -73,8 +74,8 @@ export interface RenderCommand {
   textFiles: TextFile[];
 }
 
-const INK_COLOUR = '0x2A221C';
-const HANDLE_COLOUR = '0x6B5C4C';
+const INK_COLOUR = BRAND_PALETTE.ink;
+const HANDLE_COLOUR = BRAND_PALETTE.handle;
 
 export const buildRenderCommand = (input: BuildRenderCommandInput): RenderCommand => {
   const { width, height, fps } = RENDER_PROFILE;
@@ -114,21 +115,44 @@ export const buildRenderCommand = (input: BuildRenderCommandInput): RenderComman
       const textPath = `${input.workDir}/quote-line-${index}.txt`;
       textFiles.push({ path: textPath, content: line });
       const y = layout.y + index * (layout.fontSize + layout.lineSpacing);
+
+      // Centred on the reserved area, matching the brand reference. drawtext
+      // resolves `text_w` per line, so each line self-centres regardless of
+      // length rather than needing measured widths here.
+      const x =
+        layout.align === 'center' ? `(${layout.centreX}-text_w/2)` : String(layout.x);
+
       stages.push(
         [
           'drawtext=' + `fontfile='${escapeFilterValue(input.fontPath)}'`,
           `textfile='${escapeFilterValue(textPath)}'`,
-          `x=${layout.x}`,
+          `x=${x}`,
           `y=${y}`,
           `fontsize=${layout.fontSize}`,
           `fontcolor=${INK_COLOUR}`,
           // A whisper of shadow keeps the ink legible over paper grain.
-          'shadowcolor=0xD8C9AE@0.55',
+          `shadowcolor=${BRAND_PALETTE.shadow}`,
           'shadowx=2',
           'shadowy=2',
         ].join(':'),
       );
     });
+
+    // Thin hand-drawn rule beneath the quote, as in the reference frame.
+    if (BRAND_TYPOGRAPHY.underline.enabled && layout.lines.length > 0) {
+      const ruleWidth = Math.round(layout.blockWidth * BRAND_TYPOGRAPHY.underline.widthRatio);
+      const ruleY = layout.y + layout.blockHeight + BRAND_TYPOGRAPHY.underline.offsetPx;
+      stages.push(
+        [
+          'drawbox=' + `x=${layout.centreX - Math.round(ruleWidth / 2)}`,
+          `y=${ruleY}`,
+          `w=${ruleWidth}`,
+          `h=${BRAND_TYPOGRAPHY.underline.thicknessPx}`,
+          `color=${BRAND_PALETTE.underline}@0.85`,
+          't=fill',
+        ].join(':'),
+      );
+    }
   }
 
   if (input.brandHandle) {

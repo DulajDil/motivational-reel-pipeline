@@ -29,6 +29,7 @@ export class MockImageGenerator implements ImageGenerator {
       sceneConcept: request.sceneConcept,
       textSafeArea: request.textSafeArea,
       quoteRenderMode: request.quoteRenderMode,
+      hasReferenceImage: request.referenceImage !== undefined,
     });
 
     return {

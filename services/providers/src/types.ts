@@ -77,6 +77,24 @@ export interface ImageRequest {
   width: number;
   height: number;
   attempt: number;
+  /**
+   * Approved brand reference frame, used as a style and composition guide so
+   * every Reel reads as the same series. Loaded from REFERENCE_IMAGE_S3_URI.
+   * Providers that cannot condition on an image must ignore it rather than
+   * silently sending it as content.
+   */
+  referenceImage?: ReferenceImage | undefined;
+}
+
+export interface ReferenceImage {
+  /** Raw bytes of the approved reference frame. */
+  data: Uint8Array;
+  format: 'png' | 'jpeg';
+  /**
+   * 0..1. How strongly the generated image should resemble the reference:
+   * higher is more faithful to the style, lower gives the model more freedom.
+   */
+  similarityStrength: number;
 }
 
 export interface GeneratedImage extends ProviderIdentity {

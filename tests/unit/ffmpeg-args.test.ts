@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { DEFAULT_TEXT_SAFE_AREAS } from '@mrp/providers';
+import { BRAND_TEXT_SAFE_AREA, BRAND_TYPOGRAPHY } from '@mrp/providers';
 import {
   buildProbeCommand,
   buildRenderCommand,
@@ -15,7 +15,7 @@ const baseInput = {
   outputPath: '/work/job-1/reel.mp4',
   fontPath: '/opt/fonts/Caveat.ttf',
   quote: 'Begin again as many times as the morning allows',
-  textSafeArea: DEFAULT_TEXT_SAFE_AREAS.upper_left,
+  textSafeArea: BRAND_TEXT_SAFE_AREA,
   durationSeconds: 14,
   seed: 123_456,
   workDir: '/work/job-1',
@@ -82,10 +82,34 @@ describe('buildRenderCommand', () => {
   });
 
   it('adds the brand handle only when configured', () => {
-    expect(buildRenderCommand(baseInput).filterGraph.match(/drawtext/g)).toHaveLength(4);
+    const base = buildRenderCommand(baseInput).filterGraph.match(/drawtext/g)!.length;
     const withHandle = buildRenderCommand({ ...baseInput, brandHandle: '@example' });
-    expect(withHandle.filterGraph.match(/drawtext/g)).toHaveLength(5);
+    expect(withHandle.filterGraph.match(/drawtext/g)).toHaveLength(base + 1);
     expect(withHandle.textFiles.some((file) => file.content === '@example')).toBe(true);
+  });
+
+  it('centres every line on the reserved area, as the brand reference does', () => {
+    const { filterGraph, layout } = buildRenderCommand(baseInput);
+    expect(layout.align).toBe('center');
+    // Each line self-centres via drawtext's text_w, so line length cannot shift it.
+    const centred = filterGraph.match(new RegExp(`x=\\(${layout.centreX}-text_w/2\\)`, 'g'));
+    expect(centred).toHaveLength(layout.lines.length);
+  });
+
+  it('draws the hand-drawn rule beneath the quote', () => {
+    const { filterGraph, layout } = buildRenderCommand(baseInput);
+    expect(BRAND_TYPOGRAPHY.underline.enabled).toBe(true);
+    expect(filterGraph).toContain('drawbox=');
+    // The rule sits below the text block and stays inside the reserved area.
+    const ruleY = layout.y + layout.blockHeight + BRAND_TYPOGRAPHY.underline.offsetPx;
+    expect(filterGraph).toContain(`y=${ruleY}`);
+    expect(ruleY).toBeGreaterThan(layout.y + layout.blockHeight);
+  });
+
+  it('omits the rule when the quote is not drawn', () => {
+    expect(buildRenderCommand({ ...baseInput, drawQuote: false }).filterGraph).not.toContain(
+      'drawbox=',
+    );
   });
 
   it('fades in and out', () => {
@@ -117,11 +141,11 @@ describe('layoutQuote', () => {
   it('keeps the text block inside the reserved area', () => {
     const layout = layoutQuote({
       text: baseInput.quote,
-      area: DEFAULT_TEXT_SAFE_AREAS.upper_left,
+      area: BRAND_TEXT_SAFE_AREA,
       canvasWidth: 1080,
       canvasHeight: 1920,
     });
-    const area = DEFAULT_TEXT_SAFE_AREAS.upper_left;
+    const area = BRAND_TEXT_SAFE_AREA;
     expect(layout.y).toBeGreaterThanOrEqual(area.y * 1920);
     expect(layout.y + layout.blockHeight).toBeLessThanOrEqual((area.y + area.height) * 1920 + 1);
     expect(layout.x + layout.blockWidth).toBeLessThanOrEqual((area.x + area.width) * 1080 + 1);
@@ -130,13 +154,13 @@ describe('layoutQuote', () => {
   it('shrinks the font for a longer line rather than overflowing', () => {
     const short = layoutQuote({
       text: 'Start small today',
-      area: DEFAULT_TEXT_SAFE_AREAS.upper_left,
+      area: BRAND_TEXT_SAFE_AREA,
       canvasWidth: 1080,
       canvasHeight: 1920,
     });
     const long = layoutQuote({
       text: 'Start small today and keep the quiet promise you made to yourself last week',
-      area: DEFAULT_TEXT_SAFE_AREAS.upper_left,
+      area: BRAND_TEXT_SAFE_AREA,
       canvasWidth: 1080,
       canvasHeight: 1920,
     });
@@ -147,7 +171,7 @@ describe('layoutQuote', () => {
   it('never splits a word', () => {
     const layout = layoutQuote({
       text: baseInput.quote,
-      area: DEFAULT_TEXT_SAFE_AREAS.upper_middle,
+      area: BRAND_TEXT_SAFE_AREA,
       canvasWidth: 1080,
       canvasHeight: 1920,
     });

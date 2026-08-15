@@ -161,6 +161,8 @@ Additionally:
   reference — see [`docs/music-rights.md`](docs/music-rights.md).
 - AI-generated spelling is never trusted: `QUOTE_RENDER_MODE` defaults to
   `overlay`, so FFmpeg draws the authoritative text.
+- Everything except the illustration itself is deterministic — paper, palette,
+  quote position, font, underline. See [`docs/brand-consistency.md`](docs/brand-consistency.md).
 
 ---
 
@@ -186,6 +188,7 @@ ECR). The default region is `ap-southeast-2`.
 
 ## Documentation
 
+- [`docs/brand-consistency.md`](docs/brand-consistency.md) — how every Reel stays on-style
 - [`docs/architecture.md`](docs/architecture.md) — diagrams, state machine, failure modes
 - [`docs/data-model.md`](docs/data-model.md) — DynamoDB key patterns and access patterns
 - [`docs/meta-onboarding.md`](docs/meta-onboarding.md) — Meta app setup and its caveats

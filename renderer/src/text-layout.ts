@@ -1,4 +1,5 @@
 import type { TextSafeArea } from '@mrp/shared';
+import { BRAND_TYPOGRAPHY } from '@mrp/providers';
 
 /**
  * Quote layout.
@@ -21,6 +22,8 @@ export interface LayoutOptions {
   /** Average glyph advance as a fraction of font size. */
   glyphWidthRatio?: number;
   lineHeightRatio?: number;
+  /** Centred matches the brand reference; left is kept for experiments. */
+  align?: 'center' | 'left';
 }
 
 export interface QuoteLayout {
@@ -32,6 +35,9 @@ export interface QuoteLayout {
   y: number;
   blockWidth: number;
   blockHeight: number;
+  align: 'center' | 'left';
+  /** Horizontal centre of the reserved area, used for centred drawtext. */
+  centreX: number;
 }
 
 const wrap = (words: string[], maxChars: number): string[] => {
@@ -53,9 +59,9 @@ const wrap = (words: string[], maxChars: number): string[] => {
 export const layoutQuote = (options: LayoutOptions): QuoteLayout => {
   const padding = options.padding ?? 0.08;
   const glyphWidthRatio = options.glyphWidthRatio ?? 0.46;
-  const lineHeightRatio = options.lineHeightRatio ?? 1.42;
-  const maxFontSize = options.maxFontSize ?? 96;
-  const minFontSize = options.minFontSize ?? 44;
+  const lineHeightRatio = options.lineHeightRatio ?? BRAND_TYPOGRAPHY.lineHeightRatio;
+  const maxFontSize = options.maxFontSize ?? BRAND_TYPOGRAPHY.maxFontSize;
+  const minFontSize = options.minFontSize ?? BRAND_TYPOGRAPHY.minFontSize;
 
   const areaWidth = options.area.width * options.canvasWidth;
   const areaHeight = options.area.height * options.canvasHeight;
@@ -100,5 +106,7 @@ export const layoutQuote = (options: LayoutOptions): QuoteLayout => {
     y: Math.round(areaY + (areaHeight - blockHeight) / 2),
     blockWidth,
     blockHeight,
+    align: options.align ?? 'center',
+    centreX: Math.round(areaX + areaWidth / 2),
   };
 };
