@@ -1,0 +1,29 @@
+node_modules/
+dist/
+cdk.out/
+coverage/
+*.tsbuildinfo
+
+# Local render output + scratch. Never commit rendered media.
+.local/
+*.mp4
+*.mov
+*.m4a
+*.mp3
+*.wav
+
+# Fonts are fetched, not vendored (licence text is kept, binaries are not).
+renderer/fonts/*.ttf
+renderer/fonts/*.otf
+
+# Secrets never belong in the repo.
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+secrets.json
+
+.DS_Store
+.idea/
+.vscode/

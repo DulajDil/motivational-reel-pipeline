@@ -1,0 +1,14 @@
+node_modules
+**/node_modules
+**/cdk.out
+**/dist
+.local
+coverage
+.git
+docs
+tests
+scripts
+*.mp4
+*.mov
+.env
+.env.*

@@ -1,0 +1,40 @@
+{
+  "compilerOptions": {
+    "target": "ES2023",
+    "lib": ["ES2023"],
+    "module": "ESNext",
+    "moduleResolution": "Bundler",
+    "resolveJsonModule": true,
+    "esModuleInterop": true,
+    "allowSyntheticDefaultImports": true,
+    "strict": true,
+    "noImplicitOverride": true,
+    "noUncheckedIndexedAccess": true,
+    "noFallthroughCasesInSwitch": true,
+    "exactOptionalPropertyTypes": false,
+    "noEmit": true,
+    "skipLibCheck": true,
+    "forceConsistentCasingInFileNames": true,
+    "types": ["node"],
+    "baseUrl": ".",
+    "paths": {
+      "@mrp/shared": ["services/shared/src/index.ts"],
+      "@mrp/shared/*": ["services/shared/src/*"],
+      "@mrp/providers": ["services/providers/src/index.ts"],
+      "@mrp/providers/*": ["services/providers/src/*"],
+      "@mrp/handlers": ["services/handlers/src/index.ts"],
+      "@mrp/handlers/*": ["services/handlers/src/*"],
+      "@mrp/renderer": ["renderer/src/index.ts"],
+      "@mrp/renderer/*": ["renderer/src/*"]
+    }
+  },
+  "include": [
+    "services/**/*.ts",
+    "renderer/**/*.ts",
+    "infra/**/*.ts",
+    "scripts/**/*.ts",
+    "tests/**/*.ts",
+    "vitest.config.ts"
+  ],
+  "exclude": ["node_modules", "**/cdk.out/**", "**/dist/**", ".local/**"]
+}

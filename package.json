@@ -1,0 +1,49 @@
+{
+  "name": "motivational-reel-pipeline",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Automated AWS pipeline that generates, validates, renders, schedules and publishes motivational Reels to Instagram and Facebook via official Meta Graph APIs.",
+  "license": "UNLICENSED",
+  "engines": {
+    "node": ">=20.11.0"
+  },
+  "workspaces": [
+    "services/*",
+    "renderer",
+    "infra"
+  ],
+  "scripts": {
+    "lint": "eslint .",
+    "lint:fix": "eslint . --fix",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "build": "npm run typecheck && npm run synth",
+    "test": "vitest run",
+    "test:unit": "vitest run tests/unit",
+    "test:contract": "vitest run tests/contract",
+    "test:integration": "vitest run tests/integration",
+    "test:watch": "vitest",
+    "synth": "npm run -w infra synth",
+    "render:local": "tsx scripts/local-render.ts",
+    "dry-run": "tsx scripts/dry-run.ts",
+    "seed": "tsx scripts/seed-jobs.ts",
+    "admin": "tsx scripts/admin.ts",
+    "fonts:fetch": "bash scripts/fetch-fonts.sh",
+    "verify": "npm run lint && npm run typecheck && npm run test && npm run synth"
+  },
+  "devDependencies": {
+    "@aws-sdk/client-lambda": "^3.1111.0",
+    "@eslint/js": "^9.17.0",
+    "@types/node": "^22.10.2",
+    "@typescript-eslint/eslint-plugin": "^8.19.0",
+    "@typescript-eslint/parser": "^8.19.0",
+    "esbuild": "^0.24.2",
+    "eslint": "^9.17.0",
+    "ffmpeg-static": "^5.2.0",
+    "tsx": "^4.19.2",
+    "typescript": "^5.7.2",
+    "vitest": "^2.1.8"
+  },
+  "dependencies": {
+    "zod": "^3.24.1"
+  }
+}
