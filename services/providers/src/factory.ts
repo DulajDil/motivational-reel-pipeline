@@ -51,6 +51,7 @@ export interface CreateProvidersOptions {
   config: AppConfig;
   /** Private assets bucket, needed to fetch licensed music. */
   store?: ObjectStore | undefined;
+  /** Test override; production reads BEDROCK_IMAGE_BODY_STYLE from config. */
   bedrockImageBodyStyle?: BedrockImageBodyStyle;
 }
 
@@ -100,7 +101,7 @@ export const createProviders = ({
     image: new BedrockImageGenerator({
       client: imageClient,
       modelId: imageModelId,
-      bodyStyle: bedrockImageBodyStyle ?? 'nova_titan',
+      bodyStyle: bedrockImageBodyStyle ?? config.BEDROCK_IMAGE_BODY_STYLE,
     }),
     validator: new RekognitionImageValidator({ region: config.AWS_REGION }),
     music,

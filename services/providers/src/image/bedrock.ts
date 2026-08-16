@@ -1,4 +1,4 @@
-import { NonRetryableError, RetryableError, redactPayload } from '@mrp/shared';
+import { ConfigurationError, NonRetryableError, RetryableError, redactPayload } from '@mrp/shared';
 
 import type { BedrockClient } from '../bedrock-client.js';
 import { IMAGE_NEGATIVE_PROMPT, PROMPT_VERSIONS, buildImagePrompt } from '../prompts.js';
@@ -10,14 +10,52 @@ import { readImageDimensions } from './png.js';
  *
  * Image model request bodies are not standardised the way Converse standardises
  * text, so the body is built from a small, declared shape rather than from a
- * hardcoded model family. `BEDROCK_IMAGE_BODY_STYLE` selects the shape; the
- * default covers the common `{ textToImageParams, imageGenerationConfig }` form
- * and the common `{ text_prompts, cfg_scale }` form is available as an option.
+ * hardcoded model family. `BEDROCK_IMAGE_BODY_STYLE` selects the shape:
+ *
+ *   nova_titan            `{ textToImageParams, imageGenerationConfig }`, and
+ *                         IMAGE_VARIATION when a reference frame is configured.
+ *   stability             the SDXL-era `{ text_prompts, cfg_scale }` form.
+ *   stability_style_guide Stability Image Services Style Guide, which draws a
+ *                         new scene in a reference frame's style and therefore
+ *                         REQUIRES that reference. Sizes its output from an
+ *                         aspect ratio, not from explicit pixel dimensions.
  *
  * Verify which shape your enabled model expects before switching PROVIDER_MODE
  * to `bedrock` - see docs/operations.md.
  */
-export type BedrockImageBodyStyle = 'nova_titan' | 'stability';
+export type BedrockImageBodyStyle = 'nova_titan' | 'stability' | 'stability_style_guide';
+
+/** Stability Image Services accept only this fixed set of aspect ratios. */
+const STABILITY_ASPECT_RATIOS = new Set([
+  '16:9',
+  '1:1',
+  '21:9',
+  '2:3',
+  '3:2',
+  '4:5',
+  '5:4',
+  '9:16',
+  '9:21',
+]);
+
+const greatestCommonDivisor = (a: number, b: number): number =>
+  b === 0 ? a : greatestCommonDivisor(b, a % b);
+
+/**
+ * Stability Image Services size their output from an aspect-ratio enum rather
+ * than explicit pixels, so the requested width and height are reduced to a
+ * ratio. The renderer scales the result to the exact frame size.
+ */
+const toStabilityAspectRatio = (width: number, height: number): string => {
+  const divisor = greatestCommonDivisor(width, height);
+  const ratio = `${width / divisor}:${height / divisor}`;
+  if (!STABILITY_ASPECT_RATIOS.has(ratio)) {
+    throw new ConfigurationError(
+      `Stability Image Services do not support a ${width}x${height} (${ratio}) aspect ratio.`,
+    );
+  }
+  return ratio;
+};
 
 export interface BedrockImageGeneratorOptions {
   client: BedrockClient;
@@ -28,6 +66,27 @@ export interface BedrockImageGeneratorOptions {
 interface DecodedImage {
   base64: string;
 }
+
+/**
+ * Stability Image Services report content filtering in `finish_reasons` with a
+ * 200 response and no usable image, so a null-ish reason has to be treated as an
+ * error rather than read as success. A filtered prompt will be filtered again
+ * on every retry, so it is not retryable; an inference error is.
+ */
+const assertNotFiltered = (response: unknown): void => {
+  const reasons = (response as Record<string, unknown>)?.finish_reasons;
+  if (!Array.isArray(reasons)) return;
+
+  const reason = reasons.find((entry): entry is string => typeof entry === 'string');
+  if (reason === undefined) return;
+
+  if (reason.startsWith('Filter reason')) {
+    throw new NonRetryableError(`Image generation was content-filtered: ${reason}`, {
+      code: 'IMAGE_CONTENT_FILTERED',
+    });
+  }
+  throw new RetryableError(`Image generation did not finish cleanly: ${reason}`);
+};
 
 const findBase64Image = (response: unknown): DecodedImage => {
   const record = response as Record<string, unknown>;
@@ -51,6 +110,30 @@ export class BedrockImageGenerator implements ImageGenerator {
   private buildBody(prompt: string, request: ImageRequest): unknown {
     const style = this.options.bodyStyle ?? 'nova_titan';
     const reference = request.referenceImage;
+
+    if (style === 'stability_style_guide') {
+      /*
+       * Stability Style Guide extracts the style of a reference frame and draws
+       * a new scene in it, which is exactly the brand-consistency requirement.
+       * The reference is a REQUIRED parameter of this model, so there is no
+       * prompt-only fallback: without one, the configuration is wrong.
+       */
+      if (!reference) {
+        throw new ConfigurationError(
+          'BEDROCK_IMAGE_BODY_STYLE=stability_style_guide requires REFERENCE_IMAGE_S3_URI; the model takes the reference image as a required parameter.',
+        );
+      }
+      return {
+        prompt,
+        negative_prompt: IMAGE_NEGATIVE_PROMPT,
+        image: Buffer.from(reference.data).toString('base64'),
+        aspect_ratio: toStabilityAspectRatio(request.width, request.height),
+        // How closely the output's style follows the reference. 0..1, default 0.5.
+        fidelity: reference.similarityStrength,
+        seed: request.seed % 4_294_967_294,
+        output_format: 'png',
+      };
+    }
 
     if (style === 'nova_titan' && reference) {
       /*
@@ -121,6 +204,7 @@ export class BedrockImageGenerator implements ImageGenerator {
       this.buildBody(prompt, request),
     );
 
+    assertNotFiltered(response);
     const { base64 } = findBase64Image(response);
     const data = new Uint8Array(Buffer.from(base64, 'base64'));
     if (data.byteLength === 0) {

@@ -59,50 +59,75 @@ it is passed to the image model as a style guide on every generation:
 
 ```bash
 REFERENCE_IMAGE_S3_URI=s3://mrp-prod-assets-<account>/brand/reference-style.png
-REFERENCE_SIMILARITY_STRENGTH=0.4
+REFERENCE_SIMILARITY_STRENGTH=0.5
 ```
 
-`similarityStrength` is the dial that matters. Too low and the style drifts; too
-high and the model reproduces the reference instead of illustrating a new scene.
-**Start at 0.4, generate a dozen, and look at them.**
+**With `BEDROCK_IMAGE_BODY_STYLE=stability_style_guide` the reference is not
+optional** - Style Guide takes it as a required model parameter, so a missing one
+is refused at config load rather than silently degrading to a prompt-only run.
+
+The strength is the dial that matters; it is sent as `fidelity` (0..1, model
+default 0.5). Too low and the style drifts, too high and the model reproduces the
+reference instead of illustrating a new scene. **Start at 0.5, generate a dozen,
+and look at them as a grid.**
 
 The reference must live in the same bucket the generation role is scoped to; a
 mismatch is a hard configuration error rather than a silent cross-account read.
 
 ## Model choice
 
-Checked against the live Bedrock API on 2026-08-15, in `ap-southeast-2` and
-`us-east-1`:
+Checked against the live Bedrock API on 2026-08-16, in `ap-southeast-2`,
+`us-east-1` and `us-west-2`:
 
 | Model | On Bedrock? | Notes |
 |---|---|---|
-| `openai.gpt-5.6-luna` | **Yes**, both regions, TEXT output | Works today with zero code change |
-| `gpt-image-2` | **No** — not present in any region checked | Would need a direct OpenAI provider |
-| `amazon.nova-canvas-v1:0` | Yes, `us-east-1` only | $0.06/image; no image models at all in `ap-southeast-2` |
+| `openai.gpt-5.6-luna` | **Yes**, all three regions, TEXT output | Works today with zero code change |
+| `gpt-image-2` | **No** — absent from every region checked | Every OpenAI model on Bedrock is TEXT-only |
+| `stability.stable-image-style-guide-v1:0` | Yes, `us-east-1` and `us-west-2` | **Selected.** Purpose-built for this job |
+| `amazon.nova-canvas-v1:0` | Yes, `us-east-1` only | $0.06/image; the fallback |
 
-So the text recommendation lands cleanly:
+There are no image-generation models of any kind in `ap-southeast-2`, so text and
+images run in different regions:
 
 ```bash
-BEDROCK_TEXT_MODEL_ID=openai.gpt-5.6-luna   # stays in ap-southeast-2
+BEDROCK_TEXT_MODEL_ID=openai.gpt-5.6-luna              # stays in ap-southeast-2
+BEDROCK_IMAGE_MODEL_ID=us.stability.stable-image-style-guide-v1:0
+BEDROCK_IMAGE_REGION=us-west-2                          # widest Stability set
+BEDROCK_IMAGE_BODY_STYLE=stability_style_guide
 ```
 
-The image recommendation does not. Two options:
+Note the **`us.` prefix** on the image model id: that is the inference profile,
+and the bare `stability.…` id returned by `list-foundation-models` will not
+invoke.
 
-**A. Nova Canvas on Bedrock (implemented).** Set `BEDROCK_IMAGE_MODEL_ID=amazon.nova-canvas-v1:0`
-and `BEDROCK_IMAGE_REGION=us-east-1`. Reference conditioning is wired through
-`IMAGE_VARIATION`. No new vendor, no new credential, same IAM story.
+**Why Style Guide.** It extracts the style of a reference frame and draws a new
+scene in it — which is the brand-consistency requirement stated directly, rather
+than a variation task bent toward the same end. Nova Canvas `IMAGE_VARIATION`
+remains implemented as the fallback (`BEDROCK_IMAGE_BODY_STYLE=nova_titan`), but
+its conditioning behaviour is unverified and a high `similarityStrength` will
+reproduce the reference rather than restyle.
 
-> The `IMAGE_VARIATION` parameter names and their exact behaviour must be
-> validated against the current Nova Canvas documentation before production. A
-> variation task can reproduce the reference rather than restyle a new scene if
-> `similarityStrength` is too high.
+### The size consequence
 
-**B. gpt-image-2 direct from OpenAI (not implemented).** Genuinely better at
-style-matched, repeatedly-editable illustration, which is what this project wants.
-The cost is a new provider implementation, an OpenAI API key in Secrets Manager, a
-second vendor relationship, and image data egressing to a non-AWS endpoint. The
-`ImageGenerator` port already accepts `referenceImage`, so the implementation
-would be one new class — but it is a decision, not a detail.
+Stability Image Services size their output from an `aspect_ratio` enum at roughly
+one megapixel. **They cannot be asked for 1080×1920.** Two things follow:
+
+- The validator runs in *aspect* mode: it enforces the 9:16 ratio and a
+  `MIN_IMAGE_HEIGHT` floor (default 1280) instead of an exact pixel match. This
+  is derived from `BEDROCK_IMAGE_BODY_STYLE`, not a separate switch, so it cannot
+  drift out of step with the model.
+- The renderer scales the frame to 1080×1920 as it already does for Ken Burns, so
+  the delivered MP4 is unchanged.
+
+`finish_reasons` is also checked: Stability reports content filtering with an HTTP
+200 and no image, so an unchecked response would read as success. A filtered
+prompt is non-retryable (it will filter identically next time); an inference error
+is retryable.
+
+**gpt-image-2 remains available as a later move.** It would need a direct OpenAI
+provider, an API key in Secrets Manager, a second vendor and image egress off AWS.
+The `ImageGenerator` port already accepts `referenceImage`, so it is one new class
+— a decision, not a detail.
 
 ## Tuning checklist
 
@@ -114,6 +139,7 @@ Work in this order; stop as soon as it looks right.
    side. Consistency problems are obvious in a grid and invisible one at a time.
 3. If style drifts → raise `REFERENCE_SIMILARITY_STRENGTH`.
    If frames look like copies of the reference → lower it.
+   It is sent as `fidelity`; the model's own default is 0.5.
 4. If the model keeps drawing into the reserved band → strengthen the negative
    prompt, or raise `RESERVED_TOP_FRACTION`.
 5. **Bump `PROMPT_VERSIONS.image` whenever you change prompt wording**, so old
@@ -129,3 +155,9 @@ Work in this order; stop as soon as it looks right.
   identical and both pass validation; `maxSimilarity` is always 0 for images.
 - **Colour drift over time.** If you change image models, re-check the palette
   against the reference by eye. Nothing measures it.
+- **No image model here has been called live.** The Style Guide request shape is
+  built from the current AWS documentation and unit-tested against a fake client,
+  but nothing has invoked the real model. Expect to adjust after the first call.
+- **Style Guide pricing was not obtainable from the Price List API.** Check the
+  Bedrock pricing page before generating in volume; Stability Image Services are
+  not priced the same as Nova Canvas's $0.06/image.

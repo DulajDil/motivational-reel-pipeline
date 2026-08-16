@@ -7,7 +7,7 @@ import type { ImageValidator, ImageValidationRequest } from '../types.js';
  * Offline image validator.
  *
  * Checks that can be made without any AWS call:
- *   - format and exact pixel dimensions,
+ *   - format and dimensions (exact, or aspect plus a floor - see checkDimensions),
  *   - the image is not blank or near-uniform (a failed generation often is),
  *   - the reserved text area is actually clean.
  *
@@ -24,6 +24,43 @@ export interface LocalImageValidatorOptions {
   /** Minimum overall contrast; below this the frame is effectively blank. */
   minStdDev?: number;
 }
+
+/** Aspect ratios are compared as a fraction; a pixel of rounding is not a defect. */
+const ASPECT_TOLERANCE = 0.01;
+
+/**
+ * Dimension check, in one of two modes.
+ *
+ * Without `minHeight` the image must be exactly the target size, which is what
+ * a model that accepts explicit width and height should produce. With
+ * `minHeight` the aspect ratio must match and the image must be large enough to
+ * scale up cleanly, because models that size their output from an aspect-ratio
+ * enum cannot hit an exact pixel target.
+ */
+const checkDimensions = (
+  dimensions: { width: number; height: number },
+  request: ImageValidationRequest,
+): string[] => {
+  const actual = `${dimensions.width}x${dimensions.height}`;
+  const target = `${request.expectedWidth}x${request.expectedHeight}`;
+
+  if (request.minHeight === undefined) {
+    if (dimensions.width === request.expectedWidth && dimensions.height === request.expectedHeight) {
+      return [];
+    }
+    return [`wrong_dimensions:${actual}!=${target}`];
+  }
+
+  const targetAspect = request.expectedWidth / request.expectedHeight;
+  const actualAspect = dimensions.width / dimensions.height;
+  if (Math.abs(actualAspect - targetAspect) > ASPECT_TOLERANCE) {
+    return [`wrong_aspect_ratio:${actual}!~${target}`];
+  }
+  if (dimensions.height < request.minHeight) {
+    return [`image_too_small:${actual}<${request.minHeight}h`];
+  }
+  return [];
+};
 
 const percentile = (values: number[], fraction: number): number => {
   if (values.length === 0) return 0;
@@ -57,11 +94,7 @@ export class LocalImageValidator implements ImageValidator {
       };
     }
 
-    if (dimensions.width !== request.expectedWidth || dimensions.height !== request.expectedHeight) {
-      failures.push(
-        `wrong_dimensions:${dimensions.width}x${dimensions.height}!=${request.expectedWidth}x${request.expectedHeight}`,
-      );
-    }
+    failures.push(...checkDimensions(dimensions, request));
 
     const detectedTextInSafeArea: string[] = [];
 

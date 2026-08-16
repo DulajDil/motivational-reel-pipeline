@@ -93,6 +93,8 @@ export interface ReferenceImage {
   /**
    * 0..1. How strongly the generated image should resemble the reference:
    * higher is more faithful to the style, lower gives the model more freedom.
+   * Maps to `fidelity` on Stability Style Guide and to `similarityStrength` on
+   * Nova Canvas image variation.
    */
   similarityStrength: number;
 }
@@ -121,6 +123,16 @@ export interface ImageValidationRequest {
   quoteRenderMode: QuoteRenderMode;
   expectedWidth: number;
   expectedHeight: number;
+  /**
+   * When set, the image is accepted at any size at or above this height as long
+   * as the aspect ratio matches, and the renderer scales it to the target.
+   *
+   * Some image models cannot be asked for exact pixel dimensions - Stability
+   * Image Services size the output from `aspect_ratio` at roughly one megapixel
+   * - so demanding an exact match would reject every frame they produce. Leave
+   * undefined to require exactly `expectedWidth` x `expectedHeight`.
+   */
+  minHeight?: number | undefined;
 }
 
 export interface ImageValidator {

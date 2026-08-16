@@ -24,6 +24,13 @@ export interface AppConfig extends RawConfig {
   bedrockRegion: string;
   /** Region used for Bedrock image calls; often not the stack region at all. */
   bedrockImageRegion: string;
+  /**
+   * How strictly a generated illustration's size is checked. `exact` for models
+   * that accept explicit width and height, `aspect` for models that size their
+   * output from an aspect-ratio enum - there the renderer scales to the target
+   * and the validator enforces the ratio plus MIN_IMAGE_HEIGHT instead.
+   */
+  imageDimensionMode: 'exact' | 'aspect';
 }
 
 const requireValue = (value: string | undefined, name: string, why: string): string => {
@@ -72,6 +79,15 @@ const validate = (config: RawConfig): void => {
       'BEDROCK_IMAGE_MODEL_ID',
       'when PROVIDER_MODE=bedrock - verify the model is enabled in this region/account',
     );
+    // Style Guide takes the reference frame as a required model parameter, so a
+    // missing reference is a configuration error, not a silent prompt-only run.
+    if (config.BEDROCK_IMAGE_BODY_STYLE === 'stability_style_guide') {
+      requireValue(
+        config.REFERENCE_IMAGE_S3_URI,
+        'REFERENCE_IMAGE_S3_URI',
+        'when BEDROCK_IMAGE_BODY_STYLE=stability_style_guide - the model requires a reference image',
+      );
+    }
   }
 
   // Meta identifiers are only mandatory once we might actually call Meta.
@@ -119,6 +135,8 @@ export const loadConfig = (env: NodeJS.ProcessEnv = process.env): AppConfig => {
     bedrockRegion: config.BEDROCK_REGION ?? config.AWS_REGION,
     bedrockImageRegion:
       config.BEDROCK_IMAGE_REGION ?? config.BEDROCK_REGION ?? config.AWS_REGION,
+    imageDimensionMode:
+      config.BEDROCK_IMAGE_BODY_STYLE === 'stability_style_guide' ? 'aspect' : 'exact',
   };
 };
 

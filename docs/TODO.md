@@ -30,15 +30,22 @@ Nothing is hardcoded, because model availability differs per account and region.
 - [ ] Set `BEDROCK_TEXT_MODEL_ID` — must support the **Converse** API.
       `openai.gpt-5.6-luna` was confirmed available in `ap-southeast-2` on
       2026-08-15 and is a good default.
-- [ ] Set `BEDROCK_IMAGE_MODEL_ID`, and confirm it can produce **1080×1920**.
-- [ ] Confirm which request body shape your image model expects and set
-      `BedrockImageBodyStyle` (`nova_titan` or `stability`) accordingly.
-- [ ] **Set `BEDROCK_IMAGE_REGION=us-east-1`.** Checked against the live Bedrock
-      API on 2026-08-15: `ap-southeast-2` exposes **61 text models and ZERO
-      image-generation models**, while `us-east-1` exposes 14, including
-      `amazon.nova-canvas-v1:0` at **$0.06 per image**. Text can stay in Sydney;
-      image generation cannot. Re-verify in *your* account - model access is
-      granted per account, and this was checked in a different one.
+- [ ] Set `BEDROCK_IMAGE_MODEL_ID` to
+      `us.stability.stable-image-style-guide-v1:0`. **Keep the `us.` prefix** —
+      it is the inference profile, and the bare id from `list-foundation-models`
+      will not invoke.
+- [ ] Set `BEDROCK_IMAGE_BODY_STYLE=stability_style_guide` to match that model.
+      The shape cannot be inferred; a mismatch is a `ValidationException`.
+- [ ] **Set `BEDROCK_IMAGE_REGION=us-west-2`.** Checked against the live Bedrock
+      API on 2026-08-16: `ap-southeast-2` exposes **61 text models and ZERO
+      image-generation models**; `us-east-1` exposes 14 and `us-west-2` exposes
+      16. Text can stay in Sydney; image generation cannot. Re-verify in *your*
+      account — model access is granted per account, and this was checked in a
+      different one.
+- [ ] Subscribe to Stability AI Image Services in the Bedrock console. Subscribing
+      to any one of the thirteen enrols you in all of them.
+- [ ] Look up Style Guide's price before generating in volume. The Price List API
+      had no entry for it; do not assume Nova Canvas's $0.06/image applies.
 - [ ] Once confirmed, narrow the `bedrock:InvokeModel` IAM resource in
       `infra/lib/compute-stack.ts` from `*` to the specific model ARNs.
 
@@ -67,13 +74,16 @@ Follow [`meta-onboarding.md`](meta-onboarding.md) in full. Summary:
 Read [`brand-consistency.md`](brand-consistency.md) first.
 
 - [ ] Export one approved frame as the style reference and upload it to
-      `s3://<assets-bucket>/brand/reference-style.png`.
-- [ ] Set `REFERENCE_IMAGE_S3_URI` and start `REFERENCE_SIMILARITY_STRENGTH` at 0.4.
+      `s3://<assets-bucket>/brand/reference-style.png`. **This is mandatory** with
+      `stability_style_guide`: the model takes the reference as a required
+      parameter, and config load refuses to start without it.
+- [ ] Set `REFERENCE_IMAGE_S3_URI` and start `REFERENCE_SIMILARITY_STRENGTH` at
+      0.5 (sent as `fidelity`; the model's own default).
 - [ ] Generate a dozen illustrations and view them **as a grid**. Drift is
       invisible one frame at a time.
-- [ ] Decide on the image model. `gpt-image-2` is **not on Bedrock** — using it
-      means a direct OpenAI provider, a new API key and a second vendor. Nova
-      Canvas in `us-east-1` is implemented and needs no new vendor.
+- [ ] `gpt-image-2` is **not on Bedrock** in any region — every OpenAI model there
+      is TEXT-only. Adopting it later means a direct OpenAI provider, an API key
+      in Secrets Manager and a second vendor.
 
 ## 4. Music and fonts
 
@@ -155,9 +165,14 @@ Honest list of what is implemented but unproven, or deliberately left out.
   palette, typography and composition identical, but nothing guarantees the same
   *character* recurs across Reels. That needs a fixed cast of character
   references or a fine-tune.
-- **Nova Canvas `IMAGE_VARIATION` conditioning is unverified.** The request shape
-  is implemented; its behaviour at a given `similarityStrength` must be checked
-  by eye before production.
+- **No image model has been called live.** The Stability Style Guide request shape
+  is built from current AWS documentation and unit-tested against a fake client;
+  nothing has invoked a real image model. Nova Canvas `IMAGE_VARIATION` remains
+  the unverified fallback path.
+- **Stability Style Guide pricing is unknown.** The Price List API returned no
+  match for it. Check the Bedrock pricing page before generating in volume — the
+  $0.06/image figure quoted elsewhere in these docs is Nova Canvas's, not this
+  model's.
 - **Near-duplicate image detection** is a contrast/ink-density heuristic plus
   Rekognition OCR. There is no perceptual-hash comparison against previous
   images; `maxSimilarity` is always 0 for images.

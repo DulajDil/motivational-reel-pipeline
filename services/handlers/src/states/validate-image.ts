@@ -52,6 +52,9 @@ export const validateImage = async (
     quoteRenderMode: config.QUOTE_RENDER_MODE,
     expectedWidth: 1080,
     expectedHeight: 1920,
+    // Models that size from an aspect ratio cannot hit 1080x1920 exactly; the
+    // renderer scales them, so the ratio and a size floor are what matter.
+    minHeight: config.imageDimensionMode === 'aspect' ? config.MIN_IMAGE_HEIGHT : undefined,
   });
 
   await repository.updateJob(state.jobId, {

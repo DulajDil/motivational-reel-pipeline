@@ -73,8 +73,11 @@ export const rawConfigSchema = z.object({
    * assets bucket. Leave blank to generate from the text prompt alone.
    */
   REFERENCE_IMAGE_S3_URI: optionalString,
-  /** 0..1. Higher sticks closer to the reference; too high copies it. */
-  REFERENCE_SIMILARITY_STRENGTH: z.coerce.number().min(0).max(1).default(0.4),
+  /**
+   * 0..1. Higher sticks closer to the reference; too high copies it. Sent as
+   * `fidelity` to Stability Style Guide, whose own default is 0.5.
+   */
+  REFERENCE_SIMILARITY_STRENGTH: z.coerce.number().min(0).max(1).default(0.5),
 
   BEDROCK_TEXT_MODEL_ID: optionalString,
   BEDROCK_IMAGE_MODEL_ID: optionalString,
@@ -86,6 +89,19 @@ export const rawConfigSchema = z.object({
    * BEDROCK_REGION, then AWS_REGION.
    */
   BEDROCK_IMAGE_REGION: optionalString,
+  /**
+   * Request body shape for the image model - see image/bedrock.ts. Must match
+   * the model in BEDROCK_IMAGE_MODEL_ID; there is no way to infer it safely.
+   */
+  BEDROCK_IMAGE_BODY_STYLE: z
+    .enum(['nova_titan', 'stability', 'stability_style_guide'])
+    .default('nova_titan'),
+  /**
+   * Floor for a generated illustration's height when the model cannot be asked
+   * for exact pixel dimensions. The renderer scales to 1080x1920 regardless;
+   * this stops a frame arriving too small to scale up without visible softness.
+   */
+  MIN_IMAGE_HEIGHT: z.coerce.number().int().min(640).default(1280),
 
   META_GRAPH_API_VERSION: z
     .string()

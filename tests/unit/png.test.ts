@@ -107,6 +107,72 @@ describe('procedural sketch', () => {
     expect(report.failures[0]).toContain('wrong_dimensions');
   });
 
+  it('accepts a smaller frame in aspect mode, because the renderer scales it', async () => {
+    const data = renderProceduralSketch({
+      width: 810,
+      height: 1440,
+      seed: 7,
+      textSafeArea: BRAND_TEXT_SAFE_AREA,
+    });
+
+    const report = await new LocalImageValidator().validate({
+      jobId: 'test',
+      image: { data, format: 'png', width: 810, height: 1440 },
+      textSafeArea: BRAND_TEXT_SAFE_AREA,
+      quoteRenderMode: 'overlay',
+      expectedWidth: 1080,
+      expectedHeight: 1920,
+      minHeight: 1280,
+    });
+
+    expect(report.failures).toEqual([]);
+    expect(report.passed).toBe(true);
+  });
+
+  it('rejects a frame below the height floor even when the aspect is right', async () => {
+    const data = renderProceduralSketch({
+      width: 540,
+      height: 960,
+      seed: 7,
+      textSafeArea: BRAND_TEXT_SAFE_AREA,
+    });
+
+    const report = await new LocalImageValidator().validate({
+      jobId: 'test',
+      image: { data, format: 'png', width: 540, height: 960 },
+      textSafeArea: BRAND_TEXT_SAFE_AREA,
+      quoteRenderMode: 'overlay',
+      expectedWidth: 1080,
+      expectedHeight: 1920,
+      minHeight: 1280,
+    });
+
+    expect(report.passed).toBe(false);
+    expect(report.failures[0]).toContain('image_too_small');
+  });
+
+  it('rejects the wrong aspect ratio in aspect mode', async () => {
+    const data = renderProceduralSketch({
+      width: 1440,
+      height: 1440,
+      seed: 7,
+      textSafeArea: BRAND_TEXT_SAFE_AREA,
+    });
+
+    const report = await new LocalImageValidator().validate({
+      jobId: 'test',
+      image: { data, format: 'png', width: 1440, height: 1440 },
+      textSafeArea: BRAND_TEXT_SAFE_AREA,
+      quoteRenderMode: 'overlay',
+      expectedWidth: 1080,
+      expectedHeight: 1920,
+      minHeight: 1280,
+    });
+
+    expect(report.passed).toBe(false);
+    expect(report.failures[0]).toContain('wrong_aspect_ratio');
+  });
+
   it('rejects a blank frame as low contrast', async () => {
     const blank = encodePng(1080, 1920, new Uint8Array(1080 * 1920 * 3).fill(240));
 

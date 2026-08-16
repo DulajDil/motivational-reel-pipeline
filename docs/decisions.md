@@ -249,3 +249,46 @@ The practical consequence: **orchestration choices here are not cost decisions.*
 The four states merged in decision 11 were worth about **9 cents a month** at 30
 reels/day. That refactor was about clarity. If cost matters, the lever is the
 image model and how often regeneration is triggered - not Step Functions.
+
+---
+
+## 13. Stability Style Guide for illustrations, not Nova Canvas or gpt-image-2
+
+**Decision.** `BEDROCK_IMAGE_MODEL_ID=us.stability.stable-image-style-guide-v1:0`
+in `us-west-2`, selected by `BEDROCK_IMAGE_BODY_STYLE=stability_style_guide`.
+Nova Canvas stays implemented as the `nova_titan` fallback.
+
+**Why.** The brand requirement is "a new scene in an established style". Style
+Guide states that as its purpose; Nova Canvas `IMAGE_VARIATION` is a variation
+task bent toward it, which is why its conditioning behaviour was flagged as
+unverified. A model built for the job beats a model coerced into it.
+
+`gpt-image-2` was recommended externally but is **not on Bedrock in any region** —
+every OpenAI model there is TEXT-only (checked 2026-08-16 across
+`ap-southeast-2`, `us-east-1`, `us-west-2`). Adopting it means a second vendor,
+an API key in Secrets Manager and image data leaving AWS. That is a real option,
+but a decision rather than a config change, so it was not taken by default.
+`openai.gpt-5.6-luna` *is* on Bedrock in Sydney and is used for text.
+
+**The consequence that mattered.** Stability Image Services size output from an
+`aspect_ratio` enum at roughly one megapixel and **cannot be asked for
+1080×1920**. An exact-dimension check would have rejected every frame the model
+produces. So the validator gained a second mode: with `minHeight` set it enforces
+the aspect ratio and a size floor instead of exact pixels, and the renderer scales
+to the target as it already did for Ken Burns.
+
+That mode is **derived from the body style**, not exposed as its own switch —
+`imageDimensionMode` is computed in `loadConfig`. A separate knob could be set
+inconsistently with the model; a derived value cannot.
+
+**Two smaller correctness points, both from the API docs rather than guesswork:**
+
+- The model id needs the **`us.` inference-profile prefix**. The bare
+  `stability.…` id that `list-foundation-models` returns will not invoke.
+- Stability reports content filtering in `finish_reasons` with an HTTP 200 and no
+  image. Unchecked, that reads as success. A filtered prompt is non-retryable —
+  it filters identically next time — while an inference error is retryable.
+
+**Still unverified:** no image model has been invoked live, and the Price List API
+returned no entry for Style Guide, so its cost is unknown. The $0.06/image figure
+in decision 12 is Nova Canvas's and does not transfer.
