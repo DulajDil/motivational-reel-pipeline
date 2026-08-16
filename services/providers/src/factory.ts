@@ -7,6 +7,8 @@ import {
   type SecretsPort,
 } from '@mrp/shared';
 
+import { OpenAIImageGenerator } from './image/openai.js';
+
 import { BedrockClient } from './bedrock-client.js';
 import { BedrockCaptionGenerator } from './caption/bedrock.js';
 import { MockCaptionGenerator } from './caption/mock.js';
@@ -51,13 +53,59 @@ export interface CreateProvidersOptions {
   config: AppConfig;
   /** Private assets bucket, needed to fetch licensed music. */
   store?: ObjectStore | undefined;
+  /** Required when IMAGE_PROVIDER=openai; the key is read lazily, per image. */
+  secrets?: SecretsPort | undefined;
   /** Test override; production reads BEDROCK_IMAGE_BODY_STYLE from config. */
   bedrockImageBodyStyle?: BedrockImageBodyStyle;
 }
 
+/**
+ * Builds the illustration generator.
+ *
+ * OpenAI is the one provider that leaves AWS, so its key is resolved through a
+ * closure rather than fetched here: this factory stays synchronous, and the
+ * secret is only read on a path that actually generates an image.
+ */
+const createImageGenerator = (
+  config: AppConfig,
+  secrets: SecretsPort | undefined,
+  imageClient: BedrockClient,
+  bodyStyle: BedrockImageBodyStyle,
+): ImageGenerator => {
+  if (config.IMAGE_PROVIDER !== 'openai') {
+    const modelId = config.BEDROCK_IMAGE_MODEL_ID;
+    if (!modelId) {
+      throw new ConfigurationError('IMAGE_PROVIDER=bedrock requires BEDROCK_IMAGE_MODEL_ID.');
+    }
+    return new BedrockImageGenerator({ client: imageClient, modelId, bodyStyle });
+  }
+
+  const modelId = config.OPENAI_IMAGE_MODEL_ID;
+  const secretArn = config.OPENAI_SECRET_ARN;
+  if (!modelId || !secretArn) {
+    throw new ConfigurationError(
+      'IMAGE_PROVIDER=openai requires OPENAI_IMAGE_MODEL_ID and OPENAI_SECRET_ARN.',
+    );
+  }
+  if (!secrets) {
+    throw new ConfigurationError(
+      'IMAGE_PROVIDER=openai requires a SecretsPort so the API key can be read from Secrets Manager.',
+    );
+  }
+
+  return new OpenAIImageGenerator({
+    apiKey: async () => (await secrets.getApiKeySecret(secretArn)).apiKey,
+    modelId,
+    size: config.OPENAI_IMAGE_SIZE,
+    quality: config.OPENAI_IMAGE_QUALITY,
+    baseUrl: config.OPENAI_BASE_URL,
+  });
+};
+
 export const createProviders = ({
   config,
   store,
+  secrets,
   bedrockImageBodyStyle,
 }: CreateProvidersOptions): ProviderBundle => {
   const music = new ConfiguredMusicProvider({
@@ -80,11 +128,8 @@ export const createProviders = ({
 
   // Validated in loadConfig, re-asserted here so this factory is safe standalone.
   const textModelId = config.BEDROCK_TEXT_MODEL_ID;
-  const imageModelId = config.BEDROCK_IMAGE_MODEL_ID;
-  if (!textModelId || !imageModelId) {
-    throw new ConfigurationError(
-      'PROVIDER_MODE=bedrock requires BEDROCK_TEXT_MODEL_ID and BEDROCK_IMAGE_MODEL_ID.',
-    );
+  if (!textModelId) {
+    throw new ConfigurationError('PROVIDER_MODE=bedrock requires BEDROCK_TEXT_MODEL_ID.');
   }
 
   const textClient = BedrockClient.forRegion(config.bedrockRegion);
@@ -98,11 +143,12 @@ export const createProviders = ({
   return {
     quote: new BedrockQuoteGenerator({ client: textClient, modelId: textModelId }),
     caption: new BedrockCaptionGenerator({ client: textClient, modelId: textModelId }),
-    image: new BedrockImageGenerator({
-      client: imageClient,
-      modelId: imageModelId,
-      bodyStyle: bedrockImageBodyStyle ?? config.BEDROCK_IMAGE_BODY_STYLE,
-    }),
+    image: createImageGenerator(
+      config,
+      secrets,
+      imageClient,
+      bedrockImageBodyStyle ?? config.BEDROCK_IMAGE_BODY_STYLE,
+    ),
     validator: new RekognitionImageValidator({ region: config.AWS_REGION }),
     music,
   };

@@ -18,6 +18,23 @@ Nothing in this list has been done for you. Each section gates the next.
       and three windows a day.
 - [ ] Decide the **brand handle** (`BRAND_HANDLE`), or leave it blank for none.
 
+## 2a. OpenAI image generation (the production path)
+
+Prod ships with `IMAGE_PROVIDER=openai`. This is the only call that leaves AWS.
+
+- [ ] Confirm your OpenAI account has **`gpt-image-2`** access and billing set up.
+- [ ] Create the API key. Put it in the `mrp-<env>-openai` secret created by the
+      foundation stack, as `{"apiKey": "sk-..."}`. **Out of band — never commit it.**
+- [ ] Check OpenAI's image pricing at your expected volume. This is now the main
+      cost driver, and it is not on your AWS bill.
+- [ ] Confirm the generation Lambda has outbound internet. It is not in a VPC by
+      default, so it does; if you put it in one, it needs a NAT gateway.
+- [ ] Generate a dozen and compare against your manual frames. If the API output
+      differs from what you got by hand, adjust the prompt — the ChatGPT app and
+      the API handle prompts differently.
+- [ ] To fall back to Bedrock at any point, set `IMAGE_PROVIDER=bedrock`. Nothing
+      else needs to change; section 2 below stays accurate.
+
 ## 2. Choose Bedrock models
 
 Nothing is hardcoded, because model availability differs per account and region.
@@ -165,10 +182,15 @@ Honest list of what is implemented but unproven, or deliberately left out.
   palette, typography and composition identical, but nothing guarantees the same
   *character* recurs across Reels. That needs a fixed cast of character
   references or a fine-tune.
-- **No image model has been called live.** The Stability Style Guide request shape
-  is built from current AWS documentation and unit-tested against a fake client;
-  nothing has invoked a real image model. Nova Canvas `IMAGE_VARIATION` remains
-  the unverified fallback path.
+- **No image model has been called live**, on either path. The OpenAI Images and
+  Stability Style Guide request shapes are built from current vendor
+  documentation and unit-tested against fakes; neither has hit a real endpoint.
+- **The manual frames may have come from the ChatGPT app, not the API.** The two
+  surfaces handle prompts differently, so the first API results may need prompt
+  adjustment to match what was achieved by hand.
+- **`REFERENCE_SIMILARITY_STRENGTH` does nothing on the OpenAI path.**
+  gpt-image-2 does not accept `input_fidelity`. The setting still applies to the
+  Bedrock fallbacks.
 - **Stability Style Guide pricing is unknown.** The Price List API returned no
   match for it. Check the Bedrock pricing page before generating in volume — the
   $0.06/image figure quoted elsewhere in these docs is Nova Canvas's, not this

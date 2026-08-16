@@ -39,6 +39,7 @@ export class FoundationStack extends Stack {
   public readonly table: dynamodb.Table;
 
   public readonly metaSecret: secretsmanager.Secret;
+  public readonly openAiSecret: secretsmanager.Secret;
 
   public readonly killSwitchParameter: ssm.StringParameter;
 
@@ -165,6 +166,24 @@ export class FoundationStack extends Stack {
         // operator replaces the whole value during onboarding.
         secretStringTemplate: JSON.stringify({ appId: 'REPLACE_ME', appSecret: 'REPLACE_ME' }),
         generateStringKey: 'pageAccessToken',
+        excludePunctuation: true,
+        passwordLength: 40,
+      },
+      removalPolicy: isProd ? RemovalPolicy.RETAIN : RemovalPolicy.DESTROY,
+    });
+
+    /*
+     * OpenAI API key, used only when IMAGE_PROVIDER=openai. Kept separate from
+     * the Meta secret so the two rotate independently and the generation role
+     * can be granted this one without ever seeing a publishing credential.
+     */
+    this.openAiSecret = new secretsmanager.Secret(this, 'OpenAiSecret', {
+      secretName: resourceName(settings, 'openai'),
+      description:
+        'OpenAI API key for image generation. Shape: {apiKey}. Populate out of band; never commit a real value.',
+      generateSecretString: {
+        secretStringTemplate: JSON.stringify({}),
+        generateStringKey: 'apiKey',
         excludePunctuation: true,
         passwordLength: 40,
       },

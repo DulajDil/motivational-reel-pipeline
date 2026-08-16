@@ -72,21 +72,57 @@ const validate = (config: RawConfig): void => {
     );
   }
 
+  if (config.IMAGE_PROVIDER === 'openai' && config.PROVIDER_MODE !== 'mock') {
+    requireValue(
+      config.OPENAI_IMAGE_MODEL_ID,
+      'OPENAI_IMAGE_MODEL_ID',
+      'when IMAGE_PROVIDER=openai',
+    );
+    requireValue(
+      config.OPENAI_SECRET_ARN,
+      'OPENAI_SECRET_ARN',
+      'when IMAGE_PROVIDER=openai - the key belongs in Secrets Manager, never in configuration',
+    );
+
+    // The Images API rejects edges that are not divisible by 16, and a ratio
+    // that is not 9:16 would letterbox or crop in the renderer.
+    const [width, height] = config.OPENAI_IMAGE_SIZE.split('x').map(Number) as [number, number];
+    if (width % 16 !== 0 || height % 16 !== 0) {
+      throw new ConfigurationError(
+        `OPENAI_IMAGE_SIZE ${config.OPENAI_IMAGE_SIZE} is invalid: both edges must be divisible by 16.`,
+      );
+    }
+    if (Math.abs(width / height - 9 / 16) > 0.001) {
+      throw new ConfigurationError(
+        `OPENAI_IMAGE_SIZE ${config.OPENAI_IMAGE_SIZE} is not 9:16. Reels are vertical; try 1152x2048 or 864x1536.`,
+      );
+    }
+    if (height < config.MIN_IMAGE_HEIGHT) {
+      throw new ConfigurationError(
+        `OPENAI_IMAGE_SIZE ${config.OPENAI_IMAGE_SIZE} is shorter than MIN_IMAGE_HEIGHT (${config.MIN_IMAGE_HEIGHT}); the validator would reject every frame.`,
+      );
+    }
+  }
+
   if (config.PROVIDER_MODE === 'bedrock') {
     requireValue(config.BEDROCK_TEXT_MODEL_ID, 'BEDROCK_TEXT_MODEL_ID', 'when PROVIDER_MODE=bedrock');
-    requireValue(
-      config.BEDROCK_IMAGE_MODEL_ID,
-      'BEDROCK_IMAGE_MODEL_ID',
-      'when PROVIDER_MODE=bedrock - verify the model is enabled in this region/account',
-    );
-    // Style Guide takes the reference frame as a required model parameter, so a
-    // missing reference is a configuration error, not a silent prompt-only run.
-    if (config.BEDROCK_IMAGE_BODY_STYLE === 'stability_style_guide') {
+    // Only needed when Bedrock is also drawing the illustrations; with
+    // IMAGE_PROVIDER=openai, Bedrock serves text alone.
+    if (config.IMAGE_PROVIDER === 'bedrock') {
       requireValue(
-        config.REFERENCE_IMAGE_S3_URI,
-        'REFERENCE_IMAGE_S3_URI',
-        'when BEDROCK_IMAGE_BODY_STYLE=stability_style_guide - the model requires a reference image',
+        config.BEDROCK_IMAGE_MODEL_ID,
+        'BEDROCK_IMAGE_MODEL_ID',
+        'when PROVIDER_MODE=bedrock - verify the model is enabled in this region/account',
       );
+      // Style Guide takes the reference frame as a required model parameter, so
+      // a missing one is a configuration error, not a silent prompt-only run.
+      if (config.BEDROCK_IMAGE_BODY_STYLE === 'stability_style_guide') {
+        requireValue(
+          config.REFERENCE_IMAGE_S3_URI,
+          'REFERENCE_IMAGE_S3_URI',
+          'when BEDROCK_IMAGE_BODY_STYLE=stability_style_guide - the model requires a reference image',
+        );
+      }
     }
   }
 
@@ -135,8 +171,13 @@ export const loadConfig = (env: NodeJS.ProcessEnv = process.env): AppConfig => {
     bedrockRegion: config.BEDROCK_REGION ?? config.AWS_REGION,
     bedrockImageRegion:
       config.BEDROCK_IMAGE_REGION ?? config.BEDROCK_REGION ?? config.AWS_REGION,
+    // Neither OpenAI Images (edges divisible by 16) nor Stability Style Guide
+    // (sized from an aspect-ratio enum) can be asked for exactly 1080x1920.
     imageDimensionMode:
-      config.BEDROCK_IMAGE_BODY_STYLE === 'stability_style_guide' ? 'aspect' : 'exact',
+      config.IMAGE_PROVIDER === 'openai' ||
+      config.BEDROCK_IMAGE_BODY_STYLE === 'stability_style_guide'
+        ? 'aspect'
+        : 'exact',
   };
 };
 

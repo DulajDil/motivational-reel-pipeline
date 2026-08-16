@@ -61,14 +61,27 @@ export const createLocalRuntime = (options: LocalRuntimeOptions): Runtime => {
     );
   }
 
+  /*
+   * A local run must never reach a real Meta credential, so the Meta token is
+   * always a placeholder and publishing is always a dry run.
+   *
+   * The OpenAI key is different: generating an illustration posts nothing, and
+   * tuning the house style means generating locally and looking at the result.
+   * It is read from the environment when present - never from a committed file -
+   * and its absence simply means IMAGE_PROVIDER=openai cannot run here.
+   */
+  const secrets = new StaticSecretsPort(
+    { pageAccessToken: 'local-placeholder-token-not-real' },
+    process.env.OPENAI_API_KEY ? { apiKey: process.env.OPENAI_API_KEY } : undefined,
+  );
+
   return {
     config,
     logger: createLogger('local', config.LOG_LEVEL),
     repository: new InMemoryJobRepository(clock),
     store,
-    providers: createProviders({ config, store }),
-    // A local run must never be able to reach a real credential.
-    secrets: new StaticSecretsPort({ pageAccessToken: 'local-placeholder-token-not-real' }),
+    providers: createProviders({ config, store, secrets }),
+    secrets,
     killSwitch: new StaticKillSwitch(false),
     clock,
     publisherFor: async (platform) => {

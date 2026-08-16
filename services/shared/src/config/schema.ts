@@ -79,6 +79,29 @@ export const rawConfigSchema = z.object({
    */
   REFERENCE_SIMILARITY_STRENGTH: z.coerce.number().min(0).max(1).default(0.5),
 
+  /**
+   * Which vendor draws illustrations. `bedrock` keeps every call inside AWS.
+   * `openai` sends the prompt and the reference frame to api.openai.com - a
+   * second vendor and image data leaving AWS, chosen deliberately because
+   * gpt-image reproduces this project's house style and no Bedrock image model
+   * matched it. Text generation is unaffected and stays on Bedrock.
+   */
+  IMAGE_PROVIDER: z.enum(['bedrock', 'openai']).default('bedrock'),
+  /** Secrets Manager ARN of a { "apiKey": "sk-..." } secret. Never inline. */
+  OPENAI_SECRET_ARN: optionalString,
+  OPENAI_IMAGE_MODEL_ID: optionalString,
+  OPENAI_BASE_URL: z.string().url().default('https://api.openai.com'),
+  /**
+   * WIDTHxHEIGHT. Both edges must be divisible by 16, which is why the exact
+   * 1080x1920 frame cannot be requested; a larger true 9:16 size is generated
+   * and the renderer scales it down.
+   */
+  OPENAI_IMAGE_SIZE: z
+    .string()
+    .regex(/^\d+x\d+$/, 'OPENAI_IMAGE_SIZE must look like 1152x2048')
+    .default('1152x2048'),
+  OPENAI_IMAGE_QUALITY: z.enum(['auto', 'low', 'medium', 'high']).default('high'),
+
   BEDROCK_TEXT_MODEL_ID: optionalString,
   BEDROCK_IMAGE_MODEL_ID: optionalString,
   BEDROCK_REGION: optionalString,

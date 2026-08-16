@@ -14,6 +14,7 @@ export * from './image/png.js';
 export * from './image/procedural-sketch.js';
 export * from './image/mock.js';
 export * from './image/bedrock.js';
+export * from './image/openai.js';
 
 export * from './validator/local.js';
 export * from './validator/rekognition.js';

@@ -292,3 +292,54 @@ inconsistently with the model; a derived value cannot.
 **Still unverified:** no image model has been invoked live, and the Price List API
 returned no entry for Style Guide, so its cost is unknown. The $0.06/image figure
 in decision 12 is Nova Canvas's and does not transfer.
+
+---
+
+## 14. Illustrations come from OpenAI, not Bedrock
+
+**Decision.** `IMAGE_PROVIDER=openai` with `gpt-image-2` is the production path.
+The Bedrock image providers stay implemented and tested as a fallback. Text
+generation is unchanged: Bedrock, `ap-southeast-2`.
+
+**Why.** Decision 13 chose Stability Style Guide by reasoning from what the model
+is *described* as doing. That reasoning was sound and still lost to a better kind
+of evidence: the house style in this repository was established by generating
+frames manually with gpt-image, and those frames are already correct. Nothing on
+Bedrock has been shown to match them.
+
+Given a model with demonstrated output for this exact brand and a model whose
+documentation fits the use case, the demonstrated one wins. The project exists to
+automate work already being done well by hand, so the automated path should use
+the tool that was doing it.
+
+**What it costs.** This is the only call in the system that leaves AWS. A second
+vendor, a second credential, a second bill, and the prompt plus the reference
+frame go to `api.openai.com`. Accepted deliberately, with the cost stated rather
+than buried.
+
+The blast radius is contained by IAM: the OpenAI key lives in its own secret and
+is granted **only** to the generation role, which has no publishing permission.
+The publisher role holds the Meta credential and cannot read the OpenAI one.
+Neither role can see the other's secret.
+
+**Three properties of the Images API that shaped the implementation:**
+
+- **Sizes must have both edges divisible by 16**, so 1080x1920 is not requestable
+  (1080 is not a multiple of 16). `1152x2048` is true 9:16 and *larger* than the
+  target, so the renderer scales down rather than up. `loadConfig` rejects an
+  illegal or non-9:16 size instead of letting the API fail at run time.
+- **There is no `negative_prompt`.** The exclusions are folded into the prompt.
+  The reserved area is defended in three places, so this weakens the weakest one.
+- **`input_fidelity` is not accepted by gpt-image-2**, which processes image
+  inputs at high fidelity automatically. `REFERENCE_SIMILARITY_STRENGTH`
+  therefore has no effect on this path; it still applies to the Bedrock ones.
+
+**The key is resolved lazily** through a closure rather than fetched when the
+provider is constructed, so the factory stays synchronous and the secret is only
+read on a path that actually generates an image.
+
+**Still unverified:** nothing here has called the Images API live. The request
+shape is built from current OpenAI documentation and tested against a fake
+`fetch`. One further caveat — if the manual frames were made in the ChatGPT app
+rather than through the API, the two surfaces differ in prompt handling, and the
+first API results may need prompt adjustment to match what was seen by hand.

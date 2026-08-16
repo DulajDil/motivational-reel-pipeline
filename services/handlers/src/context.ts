@@ -71,7 +71,7 @@ export const createAwsRuntime = (): Runtime => {
     store,
     secrets,
     killSwitch,
-    providers: createProviders({ config, store }),
+    providers: createProviders({ config, store, secrets }),
     clock: () => new Date(),
     publisherFor: (platform) => {
       let publisher = publishers.get(platform);

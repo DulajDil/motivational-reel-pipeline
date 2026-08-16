@@ -107,6 +107,45 @@ remains implemented as the fallback (`BEDROCK_IMAGE_BODY_STYLE=nova_titan`), but
 its conditioning behaviour is unverified and a high `similarityStrength` will
 reproduce the reference rather than restyle.
 
+## The production path is OpenAI, not Bedrock
+
+**`IMAGE_PROVIDER=openai` is what prod ships with.** The Bedrock paths above are
+kept as a working fallback, but they are not the default any more.
+
+The reason is evidence, not architecture: the house style in this repository was
+established by generating frames manually with gpt-image, and the results are
+already right. No Bedrock image model has been shown to match them. A model with
+demonstrated output beats a model whose description fits.
+
+```bash
+IMAGE_PROVIDER=openai
+OPENAI_IMAGE_MODEL_ID=gpt-image-2
+OPENAI_SECRET_ARN=arn:aws:secretsmanager:...:secret:mrp-prod-openai
+OPENAI_IMAGE_SIZE=1152x2048
+```
+
+**What this costs, honestly.** It is a second vendor, a second credential to
+rotate, a second bill, and it is the only call in the system that sends data
+outside AWS — the prompt and the reference frame go to `api.openai.com`. Nothing
+else changes: text generation stays on Bedrock in `ap-southeast-2`, and no Meta
+credential is ever visible to the generation role.
+
+**Size.** The Images API requires both edges divisible by 16, so **1080×1920
+cannot be requested** — 1080 is not a multiple of 16. `1152x2048` is true 9:16,
+divisible by 16 on both edges, and *larger* than the target, so the renderer
+scales down rather than up. `864x1536` is the conservative fallback. `loadConfig`
+rejects any size that fails those rules rather than letting the API do it.
+
+**No negative prompt.** Unlike every Bedrock image model, the Images API has no
+`negative_prompt` parameter. The exclusion list is folded into the prompt text
+instead. The reserved area is still defended three ways — prompt, validator,
+renderer — so this weakens only the first and weakest of the three.
+
+**`input_fidelity` is deliberately not sent.** gpt-image-2 processes image inputs
+at high fidelity automatically and the parameter is not accepted, so
+`REFERENCE_SIMILARITY_STRENGTH` has **no effect on this path**. It still applies
+to the Bedrock fallbacks. If style adherence needs tuning here, tune the prompt.
+
 ### The size consequence
 
 Stability Image Services size their output from an `aspect_ratio` enum at roughly

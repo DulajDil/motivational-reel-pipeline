@@ -23,8 +23,20 @@ export const metaSecretSchema = z.object({
 
 export type MetaSecret = z.infer<typeof metaSecretSchema>;
 
+/**
+ * Shape for a single-vendor API key, currently OpenAI. Kept separate from the
+ * Meta secret so the two rotate independently and a Lambda can be granted one
+ * without the other.
+ */
+export const apiKeySecretSchema = z.object({
+  apiKey: z.string().min(20),
+});
+
+export type ApiKeySecret = z.infer<typeof apiKeySecretSchema>;
+
 export interface SecretsPort {
   getMetaSecret(secretArn: string): Promise<MetaSecret>;
+  getApiKeySecret(secretArn: string): Promise<ApiKeySecret>;
 }
 
 /**
@@ -32,34 +44,43 @@ export interface SecretsPort {
  * never placed in Step Functions input/output or DynamoDB.
  */
 export class SecretsManagerPort implements SecretsPort {
-  private readonly cache = new Map<string, { value: MetaSecret; expiresAt: number }>();
+  private readonly cache = new Map<string, { value: unknown; expiresAt: number }>();
 
   public constructor(
     private readonly client: SecretsManagerClient = new SecretsManagerClient({}),
     private readonly ttlMs = 5 * 60 * 1000,
   ) {}
 
-  public async getMetaSecret(secretArn: string): Promise<MetaSecret> {
+  /**
+   * Fetches, parses and caches one secret. Parse failures name the offending
+   * fields and never echo the value, so a malformed secret cannot leak through
+   * an error message or a log line.
+   */
+  private async read<T>(
+    secretArn: string,
+    schema: z.ZodType<T>,
+    label: string,
+    guidance: string,
+  ): Promise<T> {
     const cached = this.cache.get(secretArn);
-    if (cached && cached.expiresAt > Date.now()) return cached.value;
+    if (cached && cached.expiresAt > Date.now()) return cached.value as T;
 
     const result = await this.client.send(new GetSecretValueCommand({ SecretId: secretArn }));
     if (!result.SecretString) {
-      throw new ConfigurationError('Meta secret has no SecretString payload.');
+      throw new ConfigurationError(`${label} has no SecretString payload.`);
     }
 
     let parsedJson: unknown;
     try {
       parsedJson = JSON.parse(result.SecretString);
     } catch {
-      throw new ConfigurationError('Meta secret is not valid JSON. See docs/meta-onboarding.md.');
+      throw new ConfigurationError(`${label} is not valid JSON. See ${guidance}.`);
     }
 
-    const parsed = metaSecretSchema.safeParse(parsedJson);
+    const parsed = schema.safeParse(parsedJson);
     if (!parsed.success) {
-      // Deliberately does not echo the value, only the failing field names.
       throw new ConfigurationError(
-        `Meta secret shape is invalid: missing/invalid ${parsed.error.issues
+        `${label} shape is invalid: missing/invalid ${parsed.error.issues
           .map((issue) => issue.path.join('.'))
           .join(', ')}`,
       );
@@ -68,14 +89,32 @@ export class SecretsManagerPort implements SecretsPort {
     this.cache.set(secretArn, { value: parsed.data, expiresAt: Date.now() + this.ttlMs });
     return parsed.data;
   }
+
+  public async getMetaSecret(secretArn: string): Promise<MetaSecret> {
+    return this.read(secretArn, metaSecretSchema, 'Meta secret', 'docs/meta-onboarding.md');
+  }
+
+  public async getApiKeySecret(secretArn: string): Promise<ApiKeySecret> {
+    return this.read(secretArn, apiKeySecretSchema, 'API key secret', 'docs/brand-consistency.md');
+  }
 }
 
 /** Test/local double. Refuses to hand out anything that looks like a real token. */
 export class StaticSecretsPort implements SecretsPort {
-  public constructor(private readonly secret: MetaSecret) {}
+  public constructor(
+    private readonly secret: MetaSecret,
+    private readonly apiKey?: ApiKeySecret,
+  ) {}
 
   public async getMetaSecret(): Promise<MetaSecret> {
     return this.secret;
+  }
+
+  public async getApiKeySecret(): Promise<ApiKeySecret> {
+    if (!this.apiKey) {
+      throw new ConfigurationError('No API key secret configured on this StaticSecretsPort.');
+    }
+    return this.apiKey;
   }
 }
 

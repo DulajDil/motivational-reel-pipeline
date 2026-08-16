@@ -97,8 +97,10 @@ export class ComputeStack extends Stack {
     foundation.assetsKey.grantDecrypt(publisherRole);
     foundation.assetsKey.grantDecrypt(adminRole);
 
-    // Only the publisher may read Meta credentials.
+    // Only the publisher may read Meta credentials, and only the generation
+    // role may read the image-vendor key. Neither can see the other's secret.
     foundation.metaSecret.grantRead(publisherRole);
+    foundation.openAiSecret.grantRead(generationRole);
 
     // Model access. Resource is "*" because the model id is configuration and
     // may be a cross-region inference profile; narrow this to the specific model
@@ -194,6 +196,7 @@ export class ComputeStack extends Stack {
       TABLE_NAME: foundation.table.tableName,
       ASSETS_BUCKET: foundation.assetsBucket.bucketName,
       META_SECRET_ARN: foundation.metaSecret.secretArn,
+      OPENAI_SECRET_ARN: foundation.openAiSecret.secretArn,
       KILL_SWITCH_PARAMETER_NAME: foundation.killSwitchParameter.parameterName,
     };
 
@@ -289,6 +292,7 @@ export class ComputeStack extends Stack {
         TABLE_NAME: this.foundation.table.tableName,
         ASSETS_BUCKET: this.foundation.assetsBucket.bucketName,
         META_SECRET_ARN: this.foundation.metaSecret.secretArn,
+        OPENAI_SECRET_ARN: this.foundation.openAiSecret.secretArn,
         KILL_SWITCH_PARAMETER_NAME: this.foundation.killSwitchParameter.parameterName,
       },
       ...options,

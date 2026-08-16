@@ -111,3 +111,48 @@ describe('loadConfig', () => {
     );
   });
 });
+
+describe('IMAGE_PROVIDER=openai', () => {
+  const openai = {
+    ...base,
+    PROVIDER_MODE: 'bedrock',
+    BEDROCK_TEXT_MODEL_ID: 'openai.gpt-5.6-luna',
+    IMAGE_PROVIDER: 'openai',
+    OPENAI_IMAGE_MODEL_ID: 'gpt-image-2',
+    OPENAI_SECRET_ARN: 'arn:aws:secretsmanager:ap-southeast-2:1:secret:openai',
+  } as NodeJS.ProcessEnv;
+
+  it('does not require a Bedrock image model, because Bedrock only serves text', () => {
+    const config = loadConfig(openai);
+    expect(config.BEDROCK_IMAGE_MODEL_ID).toBeUndefined();
+    expect(config.imageDimensionMode).toBe('aspect');
+  });
+
+  it('requires the key to come from Secrets Manager', () => {
+    const { OPENAI_SECRET_ARN: _omitted, ...withoutArn } = openai;
+    expect(() => loadConfig(withoutArn as NodeJS.ProcessEnv)).toThrow(ConfigurationError);
+  });
+
+  it('rejects a size whose edges are not divisible by 16', () => {
+    // The exact 1080x1920 frame cannot be requested: 1080 is not a multiple of 16.
+    expect(() => loadConfig({ ...openai, OPENAI_IMAGE_SIZE: '1080x1920' })).toThrow(
+      /divisible by 16/,
+    );
+  });
+
+  it('rejects a size that is not 9:16', () => {
+    expect(() => loadConfig({ ...openai, OPENAI_IMAGE_SIZE: '1024x1536' })).toThrow(/not 9:16/);
+  });
+
+  it('rejects a size shorter than the validator would accept', () => {
+    expect(() =>
+      loadConfig({ ...openai, OPENAI_IMAGE_SIZE: '576x1024', MIN_IMAGE_HEIGHT: '1280' }),
+    ).toThrow(/MIN_IMAGE_HEIGHT/);
+  });
+
+  it('accepts the documented defaults', () => {
+    const config = loadConfig(openai);
+    expect(config.OPENAI_IMAGE_SIZE).toBe('1152x2048');
+    expect(config.OPENAI_IMAGE_QUALITY).toBe('high');
+  });
+});
